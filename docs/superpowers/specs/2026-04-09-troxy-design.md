@@ -253,6 +253,10 @@ Claude Code settings.json에 추가:
 | 텍스트 검색 | token 포함 body들 | `troxy search "access_token"` → 해당 flow 식별 |
 | 대용량 응답 | 100KB+ body | body 온전히 반환, 잘리지 않음 |
 | binary 응답 | image 응답 | base64로 안전하게 처리 |
+| mock 응답 설정 | mock rule + 요청 | 설정한 mock 응답이 반환됨 |
+| 요청 수정 후 전송 | intercept rule + 요청 | 수정된 헤더/body로 서버에 전송됨 |
+| flow replay | 저장된 flow | 동일 요청이 재전송됨 |
+| 실시간 tail | 새 flow 유입 | tail 출력에 즉시 표시됨 |
 
 **에이전트 평가:**
 
@@ -300,7 +304,9 @@ troxy/
 │       │   ├── db.py       # SQLite 연결/마이그레이션
 │       │   ├── store.py    # flow 저장
 │       │   ├── query.py    # flow 조회/필터/검색
-│       │   └── export.py   # curl/httpie export
+│       │   ├── export.py   # curl/httpie export
+│       │   ├── mock.py     # mock rules CRUD
+│       │   └── intercept.py # intercept rules + pending flows
 │       ├── cli/
 │       │   ├── __init__.py
 │       │   └── main.py     # click CLI
@@ -340,8 +346,171 @@ troxy/
 - **mitmproxy 12.2.1** — addon API
 - **sqlite3** — 표준 라이브러리
 - **click** — CLI 프레임워크
+- **rich** — 터미널 컬러/테이블/JSON highlighting
 - **mcp** — MCP server SDK (anthropic/python-sdk)
 - **pytest** — 테스트
+
+## Mock Responses
+
+mitmproxy의 `request` hook에서 매칭되는 규칙이 있으면 실제 서버로 보내지 않고 가짜 응답을 반환한다.
+
+### Mock Rules 저장
+
+```sql
+CREATE TABLE IF NOT EXISTS mock_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT,              -- 매칭할 도메인 (NULL이면 전체)
+    path_pattern TEXT,        -- 매칭할 경로 (glob 패턴)
+    method TEXT,              -- 매칭할 메서드 (NULL이면 전체)
+    status_code INTEGER NOT NULL DEFAULT 200,
+    response_headers TEXT,    -- JSON
+    response_body TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at REAL NOT NULL
+);
+```
+
+### CLI
+
+```bash
+# Mock 규칙 추가
+troxy mock add --domain api.example.com --path "/api/users/*" --status 200 \
+  --body '{"id": 1, "name": "test"}' \
+  --header "Content-Type: application/json"
+
+# Mock 규칙 목록
+troxy mock list
+
+# Mock 규칙 삭제/비활성화
+troxy mock remove ID
+troxy mock disable ID
+troxy mock enable ID
+
+# 저장된 flow를 mock으로 재사용
+troxy mock from-flow FLOW_ID          # 해당 flow의 response를 mock 규칙으로 등록
+troxy mock from-flow FLOW_ID --status 500  # status만 변경해서 등록
+```
+
+### MCP
+
+```
+troxy_mock_add(domain?, path_pattern, method?, status_code, headers?, body?)
+troxy_mock_list()
+troxy_mock_remove(id)
+troxy_mock_toggle(id, enabled)
+troxy_mock_from_flow(flow_id, status_code?)
+```
+
+### Addon 동작
+
+addon의 `request` hook에서:
+1. mock_rules 테이블에서 enabled 규칙 조회
+2. domain, path, method 매칭
+3. 매칭되면 `flow.response = http.Response.make(status, body, headers)` 로 가짜 응답 주입
+4. 실제 서버에는 요청하지 않음
+
+## Request Modification
+
+실행 중인 요청을 가로채서 수정 후 전송한다. mitmproxy의 intercept 기능을 CLI/MCP로 노출.
+
+### Intercept Rules
+
+```sql
+CREATE TABLE IF NOT EXISTS intercept_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT,
+    path_pattern TEXT,
+    method TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at REAL NOT NULL
+);
+```
+
+### 동작 흐름
+
+1. intercept 규칙 설정 → addon의 `request` hook에서 매칭되는 flow를 hold
+2. hold된 flow는 `pending_flows` 테이블에 기록
+3. 사용자/Claude가 수정 후 release
+4. 수정된 요청이 서버로 전송
+
+```sql
+CREATE TABLE IF NOT EXISTS pending_flows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    flow_id TEXT NOT NULL,        -- mitmproxy 내부 flow ID
+    timestamp REAL NOT NULL,
+    method TEXT NOT NULL,
+    host TEXT NOT NULL,
+    path TEXT NOT NULL,
+    request_headers TEXT NOT NULL,
+    request_body TEXT,
+    status TEXT NOT NULL DEFAULT 'pending'  -- pending|modified|released|dropped
+);
+```
+
+### CLI
+
+```bash
+# Intercept 규칙 설정
+troxy intercept add --domain api.example.com --method POST
+troxy intercept list
+troxy intercept remove ID
+
+# 대기 중인 flow 확인
+troxy pending
+
+# Flow 수정 후 전송
+troxy modify PENDING_ID --header "Authorization: Bearer new_token"
+troxy modify PENDING_ID --body '{"updated": true}'
+troxy release PENDING_ID          # 수정 후 전송
+troxy drop PENDING_ID             # 요청 취소
+
+# 저장된 flow를 다시 보내기 (replay)
+troxy replay FLOW_ID
+troxy replay FLOW_ID --header "Authorization: Bearer new_token"
+```
+
+### MCP
+
+```
+troxy_intercept_add(domain?, path_pattern?, method?)
+troxy_intercept_list()
+troxy_intercept_remove(id)
+troxy_pending_list()
+troxy_modify(pending_id, headers?, body?)
+troxy_release(pending_id)
+troxy_drop(pending_id)
+troxy_replay(flow_id, headers?, body?)
+```
+
+### Addon 동작
+
+addon이 mitmproxy의 `request` hook에서:
+1. intercept_rules 매칭 확인
+2. 매칭 시 `flow.intercept()` 호출 → flow가 대기 상태
+3. pending_flows에 기록
+4. CLI/MCP에서 modify + release → addon이 DB를 폴링하여 flow 수정 후 `flow.resume()` 호출
+
+## UI Enhancements
+
+터미널 출력을 rich 라이브러리로 개선한다.
+
+### 기능
+
+- **컬러 출력**: HTTP 메서드별 색상 (GET=green, POST=blue, DELETE=red), 상태코드별 색상 (2xx=green, 4xx=yellow, 5xx=red)
+- **JSON syntax highlighting**: response body가 JSON이면 컬러 포맷팅
+- **테이블 포맷팅**: flow 목록을 정렬된 테이블로 표시
+- **`troxy tail`**: 실시간 flow 스트리밍 (DB polling, tail -f 스타일)
+- **`--no-color`**: 색상 비활성화 (파이프, 리다이렉트 시 자동 감지)
+
+### troxy tail
+
+```bash
+troxy tail                          # 모든 flow 실시간 표시
+troxy tail --domain api.example.com # 필터링된 실시간 스트리밍
+troxy tail --status 4xx             # 4xx 에러만
+```
+
+DB의 마지막 ID를 기억하고, 0.5초 간격으로 새 flow를 폴링하여 출력.
 
 ## Configuration
 
@@ -355,6 +524,5 @@ addon도 동일한 환경변수를 참조한다.
 ## Out of Scope
 
 - mitmproxy 설정 자동화 (인증서, 프록시 모드 등)
-- flow 수정/리플레이 기능
 - 웹 UI
 - 원격 접속/멀티 사용자
