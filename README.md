@@ -30,7 +30,7 @@ troxy start
 
 # 3. 조회
 troxy flows                        # 전체 flow 목록
-troxy flows -d example              # 도메인 필터
+troxy flows -d example.com         # 도메인 필터
 troxy flows -s 401                 # 상태코드 필터
 troxy flow 42 --body               # request/response body 확인
 troxy flow 42 --export curl        # curl 명령어로 변환
@@ -44,7 +44,7 @@ troxy tail                         # 실시간 스트리밍
 
 ```bash
 troxy flows                        # flow 목록
-troxy flows -d example              # 도메인 필터 (부분 매칭)
+troxy flows -d example.com         # 도메인 필터 (부분 매칭)
 troxy flows -s 401                 # 상태코드 필터
 troxy flows -m POST                # HTTP 메서드 필터
 troxy flows -p /api/users          # 경로 필터
@@ -61,11 +61,11 @@ troxy flow 42 --export curl        # curl로 변환
 troxy flow 42 --export httpie      # httpie로 변환
 
 troxy search "token"               # 전체 body에서 검색
-troxy search "token" -d example     # 도메인 범위 제한
+troxy search "token" -d example    # 도메인 범위 제한
 troxy search "email" --in request  # request body에서만 검색
 
 troxy tail                         # 실시간 flow 스트리밍
-troxy tail -d example               # 특정 도메인만 스트리밍
+troxy tail -d example.com          # 특정 도메인만 스트리밍
 troxy status                       # DB 상태 (flow 수, 크기)
 troxy clear --yes                  # 전체 삭제
 ```
@@ -108,10 +108,10 @@ claude mcp add -e TROXY_DB=~/.troxy/flows.db -s user troxy -- troxy-mcp
 
 이후 Claude에게 자연어로 요청:
 
-- "example API에서 401 에러 보여줘"
-- "233번 flow의 response body 확인해줘"
+- "401 에러 나는 요청 보여줘"
+- "response body 확인해줘"
 - "access_token이 포함된 요청 찾아줘"
-- "42번 flow를 curl로 변환해줘"
+- "curl로 변환해줘"
 
 <details>
 <summary>MCP 도구 목록 (17개)</summary>
