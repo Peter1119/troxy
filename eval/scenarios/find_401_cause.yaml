@@ -1,0 +1,14 @@
+name: find_401_cause
+description: "Find the cause of 401 unauthorized responses"
+fixture: auth_failure.db
+task: "pedia.watcha.com에서 401 응답이 오는 요청의 원인을 찾아라"
+steps:
+  - tool: troxy_list_flows
+    args: {status: 401}
+    expect_count: 2
+  - tool: troxy_get_flow
+    args: {id: 2, part: "response"}
+    expect_contains: "Token has expired"
+pass_criteria:
+  - "output must contain 'expired' or 'unauthorized'"
+  - "must identify at least one flow with status 401"

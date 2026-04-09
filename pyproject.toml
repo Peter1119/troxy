@@ -28,3 +28,8 @@ packages = ["src/troxy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pyyaml>=6.0.3",
+]

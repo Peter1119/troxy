@@ -1,0 +1,13 @@
+name: extract_post_body
+description: "Extract and read a POST request body"
+fixture: auth_failure.db
+task: "POST 요청의 body를 확인해라"
+steps:
+  - tool: troxy_list_flows
+    args: {method: "POST"}
+    expect_count_gte: 0
+  - tool: troxy_search
+    args: {query: "email", scope: "request"}
+    expect_count_gte: 0
+pass_criteria:
+  - "search should find POST requests containing expected content"
