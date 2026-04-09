@@ -39,14 +39,41 @@ class TroxyAddon:
         except Exception as e:
             print(f"[troxy] Error in request hook: {e}", file=sys.stderr)
 
+    @staticmethod
+    def _safe_query(request) -> str | None:
+        """Extract raw query string from request URL."""
+        url = request.pretty_url or request.url or ""
+        if "?" in url:
+            return url.split("?", 1)[1]
+        return None
+
+    @staticmethod
+    def _safe_headers(headers) -> dict:
+        """Convert any header type to plain dict."""
+        try:
+            return {str(k): str(v) for k, v in headers.items()}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _safe_body(content) -> bytes | None:
+        """Ensure body is bytes or None."""
+        if content is None:
+            return None
+        if isinstance(content, bytes):
+            return content
+        if isinstance(content, str):
+            return content.encode("utf-8")
+        return str(content).encode("utf-8")
+
     def response(self, flow):
         """Called when a response is received."""
         try:
             request = flow.request
             response = flow.response
 
-            content_type_req = request.headers.get("content-type", "")
-            content_type_resp = response.headers.get("content-type", "")
+            content_type_req = str(request.headers.get("content-type", ""))
+            content_type_resp = str(response.headers.get("content-type", ""))
 
             duration = None
             if flow.response.timestamp_end and flow.request.timestamp_start:
@@ -55,23 +82,22 @@ class TroxyAddon:
             insert_flow(
                 self.db_path,
                 timestamp=flow.request.timestamp_start or time_mod.time(),
-                method=request.method,
-                scheme=request.scheme,
-                host=request.host,
-                port=request.port,
-                path=request.path,
-                query=request.query if request.query else None,
-                request_headers={k: v for k, v in request.headers.items()},
-                request_body=request.content,
+                method=str(request.method),
+                scheme=str(request.scheme),
+                host=str(request.host),
+                port=int(request.port),
+                path=str(request.path),
+                query=self._safe_query(request),
+                request_headers=self._safe_headers(request.headers),
+                request_body=self._safe_body(request.content),
                 request_content_type=content_type_req or None,
-                status_code=response.status_code,
-                response_headers={k: v for k, v in response.headers.items()},
-                response_body=response.content,
+                status_code=int(response.status_code),
+                response_headers=self._safe_headers(response.headers),
+                response_body=self._safe_body(response.content),
                 response_content_type=content_type_resp or None,
                 duration_ms=duration,
             )
         except Exception as e:
-            # Log but don't crash mitmproxy
             print(f"[troxy] Error recording flow: {e}", file=sys.stderr)
 
     def _check_mock(self, flow):
