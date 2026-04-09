@@ -60,6 +60,10 @@ def create_redirect_chain(path: str):
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    for name in ("auth_failure.db", "redirect_chain.db"):
+        path = os.path.join(script_dir, name)
+        if os.path.exists(path):
+            os.remove(path)
     create_auth_failure(os.path.join(script_dir, "auth_failure.db"))
     create_redirect_chain(os.path.join(script_dir, "redirect_chain.db"))
     print("Fixtures created.")
