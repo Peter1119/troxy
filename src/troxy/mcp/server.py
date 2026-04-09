@@ -150,150 +150,29 @@ def handle_drop(db_path: str, args: dict) -> str:
     return json.dumps({"dropped": args["pending_id"]})
 
 
-TOOLS = {
-    "troxy_list_flows": {
-        "handler": handle_list_flows,
-        "description": "List captured HTTP flows. IMPORTANT: Always set limit (default 10). Use domain/status/method/path filters to narrow results.",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "domain": {"type": "string", "description": "Filter by domain (partial match, e.g. 'watcha')"},
-                "status": {"type": "integer", "description": "Filter by HTTP status code (e.g. 401)"},
-                "method": {"type": "string", "description": "Filter by HTTP method (e.g. POST)"},
-                "path": {"type": "string", "description": "Filter by path (partial match)"},
-                "limit": {"type": "integer", "description": "Max results to return. Default 10. Use small values.", "default": 10},
-            },
-        },
-    },
-    "troxy_get_flow": {
-        "handler": handle_get_flow,
-        "description": "Get details of a specific flow by ID. Use part='body' to get only request/response bodies.",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "integer", "description": "Flow ID"},
-                "part": {"type": "string", "enum": ["all", "request", "response", "body"], "description": "Which part to return. 'body' returns only bodies (smallest)."},
-            },
-            "required": ["id"],
-        },
-    },
-    "troxy_search": {
-        "handler": handle_search,
-        "description": "Search flow headers and bodies for text. Returns matching flows.",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Text to search for"},
-                "domain": {"type": "string", "description": "Limit search to domain"},
-                "scope": {"type": "string", "enum": ["all", "request", "response"], "default": "all"},
-                "limit": {"type": "integer", "default": 10},
-            },
-            "required": ["query"],
-        },
-    },
-    "troxy_export": {
-        "handler": handle_export,
-        "description": "Export a flow as a curl or httpie command string",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "integer", "description": "Flow ID"},
-                "format": {"type": "string", "enum": ["curl", "httpie"], "default": "curl"},
-            },
-            "required": ["id"],
-        },
-    },
-    "troxy_status": {
-        "handler": handle_status,
-        "description": "Get database status: flow count, DB size, path",
-        "schema": {"type": "object", "properties": {}},
-    },
-    "troxy_mock_add": {
-        "handler": handle_mock_add,
-        "description": "Add a mock response rule. Matching requests get fake response instead of hitting server.",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "domain": {"type": "string"},
-                "path_pattern": {"type": "string", "description": "Glob pattern for path"},
-                "method": {"type": "string"},
-                "status_code": {"type": "integer", "default": 200},
-                "headers": {"type": "string", "description": "JSON string of response headers"},
-                "body": {"type": "string", "description": "Response body string"},
-            },
-        },
-    },
-    "troxy_mock_list": {
-        "handler": handle_mock_list,
-        "description": "List all mock rules",
-        "schema": {"type": "object", "properties": {}},
-    },
-    "troxy_mock_remove": {
-        "handler": handle_mock_remove,
-        "description": "Remove a mock rule by ID",
-        "schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
-    },
-    "troxy_mock_toggle": {
-        "handler": handle_mock_toggle,
-        "description": "Enable or disable a mock rule",
-        "schema": {
-            "type": "object",
-            "properties": {"id": {"type": "integer"}, "enabled": {"type": "boolean"}},
-            "required": ["id"],
-        },
-    },
-    "troxy_mock_from_flow": {
-        "handler": handle_mock_from_flow,
-        "description": "Create a mock rule from an existing flow's response",
-        "schema": {
-            "type": "object",
-            "properties": {"flow_id": {"type": "integer"}, "status_code": {"type": "integer"}},
-            "required": ["flow_id"],
-        },
-    },
-    "troxy_intercept_add": {
-        "handler": handle_intercept_add,
-        "description": "Add an intercept rule to hold matching requests",
-        "schema": {
-            "type": "object",
-            "properties": {"domain": {"type": "string"}, "path_pattern": {"type": "string"}, "method": {"type": "string"}},
-        },
-    },
-    "troxy_intercept_list": {
-        "handler": handle_intercept_list,
-        "description": "List intercept rules",
-        "schema": {"type": "object", "properties": {}},
-    },
-    "troxy_intercept_remove": {
-        "handler": handle_intercept_remove,
-        "description": "Remove an intercept rule",
-        "schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
-    },
-    "troxy_pending_list": {
-        "handler": handle_pending_list,
-        "description": "List intercepted pending flows waiting for release",
-        "schema": {"type": "object", "properties": {}},
-    },
-    "troxy_modify": {
-        "handler": handle_modify,
-        "description": "Modify a pending flow's headers or body before releasing",
-        "schema": {
-            "type": "object",
-            "properties": {"pending_id": {"type": "integer"}, "headers": {"type": "string"}, "body": {"type": "string"}},
-            "required": ["pending_id"],
-        },
-    },
-    "troxy_release": {
-        "handler": handle_release,
-        "description": "Release a pending flow to continue to server",
-        "schema": {"type": "object", "properties": {"pending_id": {"type": "integer"}}, "required": ["pending_id"]},
-    },
-    "troxy_drop": {
-        "handler": handle_drop,
-        "description": "Drop a pending flow (cancel request)",
-        "schema": {"type": "object", "properties": {"pending_id": {"type": "integer"}}, "required": ["pending_id"]},
-    },
+from troxy.mcp.tools import TOOL_SCHEMAS
+
+_HANDLERS = {
+    "troxy_list_flows": handle_list_flows,
+    "troxy_get_flow": handle_get_flow,
+    "troxy_search": handle_search,
+    "troxy_export": handle_export,
+    "troxy_status": handle_status,
+    "troxy_mock_add": handle_mock_add,
+    "troxy_mock_list": handle_mock_list,
+    "troxy_mock_remove": handle_mock_remove,
+    "troxy_mock_toggle": handle_mock_toggle,
+    "troxy_mock_from_flow": handle_mock_from_flow,
+    "troxy_intercept_add": handle_intercept_add,
+    "troxy_intercept_list": handle_intercept_list,
+    "troxy_intercept_remove": handle_intercept_remove,
+    "troxy_pending_list": handle_pending_list,
+    "troxy_modify": handle_modify,
+    "troxy_release": handle_release,
+    "troxy_drop": handle_drop,
 }
+
+TOOLS = {name: {**TOOL_SCHEMAS[name], "handler": _HANDLERS[name]} for name in _HANDLERS}
 
 
 def main():
