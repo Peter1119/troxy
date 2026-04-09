@@ -4,10 +4,12 @@ Usage: mitmproxy -s path/to/addon.py
 Set TROXY_DB env var to control database path.
 """
 
+import fnmatch
 import json
 import os
 import sys
-import time
+import threading
+import time as time_mod
 
 # Ensure src/ is on path when running as mitmproxy script
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +26,18 @@ class TroxyAddon:
     def __init__(self):
         self.db_path = default_db_path()
         init_db(self.db_path)
+        self._intercepted_flows = {}  # flow.id -> flow
+        self._poll_thread = threading.Thread(target=self._poll_pending, daemon=True)
+        self._poll_thread.start()
+
+    def request(self, flow):
+        """Check mock rules, then intercept rules."""
+        try:
+            self._check_mock(flow)
+            if not flow.response:  # not mocked
+                self._check_intercept(flow)
+        except Exception as e:
+            print(f"[troxy] Error in request hook: {e}", file=sys.stderr)
 
     def response(self, flow):
         """Called when a response is received."""
@@ -40,7 +54,7 @@ class TroxyAddon:
 
             insert_flow(
                 self.db_path,
-                timestamp=flow.request.timestamp_start or time.time(),
+                timestamp=flow.request.timestamp_start or time_mod.time(),
                 method=request.method,
                 scheme=request.scheme,
                 host=request.host,
@@ -59,6 +73,78 @@ class TroxyAddon:
         except Exception as e:
             # Log but don't crash mitmproxy
             print(f"[troxy] Error recording flow: {e}", file=sys.stderr)
+
+    def _check_mock(self, flow):
+        from troxy.core.mock import list_mock_rules
+        from mitmproxy import http
+        rules = list_mock_rules(self.db_path, enabled_only=True)
+        for rule in rules:
+            if rule["domain"] and rule["domain"] not in flow.request.host:
+                continue
+            if rule["method"] and rule["method"].upper() != flow.request.method:
+                continue
+            if rule["path_pattern"] and not fnmatch.fnmatch(flow.request.path, rule["path_pattern"]):
+                continue
+            headers = {}
+            if rule["response_headers"]:
+                headers = json.loads(rule["response_headers"])
+            body = (rule["response_body"] or "").encode("utf-8")
+            flow.response = http.Response.make(rule["status_code"], body, headers)
+            return
+
+    def _check_intercept(self, flow):
+        from troxy.core.intercept import list_intercept_rules, add_pending_flow
+        rules = list_intercept_rules(self.db_path, enabled_only=True)
+        for rule in rules:
+            if rule["domain"] and rule["domain"] not in flow.request.host:
+                continue
+            if rule["method"] and rule["method"].upper() != flow.request.method:
+                continue
+            if rule["path_pattern"] and not fnmatch.fnmatch(flow.request.path, rule["path_pattern"]):
+                continue
+            flow.intercept()
+            add_pending_flow(
+                self.db_path,
+                flow_id=flow.id,
+                method=flow.request.method,
+                host=flow.request.host,
+                path=flow.request.path,
+                request_headers=json.dumps(dict(flow.request.headers)),
+                request_body=flow.request.content.decode("utf-8", errors="replace") if flow.request.content else None,
+            )
+            self._intercepted_flows[flow.id] = flow
+            return
+
+    def _poll_pending(self):
+        from troxy.core.intercept import get_pending_flow
+        while True:
+            try:
+                conn = get_connection(self.db_path)
+                rows = conn.execute(
+                    "SELECT * FROM pending_flows WHERE status IN ('released', 'modified', 'dropped')"
+                ).fetchall()
+                conn.close()
+                for row in rows:
+                    row = dict(row)
+                    flow = self._intercepted_flows.pop(row["flow_id"], None)
+                    if flow and row["status"] == "dropped":
+                        flow.kill()
+                    elif flow and row["status"] in ("released", "modified"):
+                        if row["status"] == "modified":
+                            if row.get("request_headers"):
+                                headers = json.loads(row["request_headers"])
+                                for k, v in headers.items():
+                                    flow.request.headers[k] = v
+                            if row.get("request_body"):
+                                flow.request.content = row["request_body"].encode("utf-8")
+                        flow.resume()
+                    conn2 = get_connection(self.db_path)
+                    conn2.execute("DELETE FROM pending_flows WHERE id = ?", (row["id"],))
+                    conn2.commit()
+                    conn2.close()
+            except Exception as e:
+                print(f"[troxy] Poll error: {e}", file=sys.stderr)
+            time_mod.sleep(0.3)
 
 
 addons = [TroxyAddon()]
