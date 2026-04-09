@@ -178,5 +178,371 @@ def clear_cmd(db, no_color, before, yes):
     click.echo("Flows cleared.")
 
 
+# ---------------------------------------------------------------------------
+# Mock group
+# ---------------------------------------------------------------------------
+
+@cli.group("mock")
+def mock_group():
+    """Manage mock rules."""
+
+
+@mock_group.command("add")
+@click.option("--db", default=None, help="Database path")
+@click.option("-d", "--domain", default=None, help="Domain to match")
+@click.option("-p", "--path", "path_pattern", default=None, help="Path pattern to match")
+@click.option("-m", "--method", default=None, help="HTTP method to match")
+@click.option("-s", "--status", "status_code", default=200, type=int, help="Response status code")
+@click.option("--header", "headers", multiple=True, help="Response header (Key: Value)")
+@click.option("--body", "response_body", default=None, help="Response body")
+def mock_add_cmd(db, domain, path_pattern, method, status_code, headers, response_body):
+    """Add a mock rule."""
+    import json as _json
+    from troxy.core.mock import add_mock_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    response_headers = None
+    if headers:
+        hdict = {}
+        for h in headers:
+            if ":" in h:
+                k, v = h.split(":", 1)
+                hdict[k.strip()] = v.strip()
+        response_headers = _json.dumps(hdict)
+    rule_id = add_mock_rule(
+        db_path,
+        domain=domain,
+        path_pattern=path_pattern,
+        method=method,
+        status_code=status_code,
+        response_headers=response_headers,
+        response_body=response_body,
+    )
+    click.echo(f"Mock rule {rule_id} added.")
+
+
+@mock_group.command("list")
+@click.option("--db", default=None, help="Database path")
+@click.option("--no-color", is_flag=True, help="Disable color output")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def mock_list_cmd(db, no_color, as_json):
+    """List mock rules."""
+    import json as _json
+    from troxy.core.mock import list_mock_rules
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    rules = list_mock_rules(db_path)
+    if as_json:
+        click.echo(_json.dumps(rules, indent=2, ensure_ascii=False, default=str))
+        return
+    if not rules:
+        click.echo("No mock rules.")
+        return
+    for r in rules:
+        status_label = "enabled" if r["enabled"] else "disabled"
+        click.echo(f"[{r['id']}] {r['domain']} {r['path_pattern']} "
+                   f"-> {r['status_code']} ({status_label})")
+
+
+@mock_group.command("remove")
+@click.option("--db", default=None, help="Database path")
+@click.argument("rule_id", type=int)
+def mock_remove_cmd(db, rule_id):
+    """Remove a mock rule."""
+    from troxy.core.mock import remove_mock_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    remove_mock_rule(db_path, rule_id)
+    click.echo(f"Mock rule {rule_id} removed.")
+
+
+@mock_group.command("disable")
+@click.option("--db", default=None, help="Database path")
+@click.argument("rule_id", type=int)
+def mock_disable_cmd(db, rule_id):
+    """Disable a mock rule."""
+    from troxy.core.mock import toggle_mock_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    toggle_mock_rule(db_path, rule_id, enabled=False)
+    click.echo(f"Mock rule {rule_id} disabled.")
+
+
+@mock_group.command("enable")
+@click.option("--db", default=None, help="Database path")
+@click.argument("rule_id", type=int)
+def mock_enable_cmd(db, rule_id):
+    """Enable a mock rule."""
+    from troxy.core.mock import toggle_mock_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    toggle_mock_rule(db_path, rule_id, enabled=True)
+    click.echo(f"Mock rule {rule_id} enabled.")
+
+
+@mock_group.command("from-flow")
+@click.option("--db", default=None, help="Database path")
+@click.argument("flow_id", type=int)
+@click.option("-s", "--status", "status_code", default=None, type=int,
+              help="Override response status code")
+def mock_from_flow_cmd(db, flow_id, status_code):
+    """Create a mock rule from an existing flow."""
+    from troxy.core.mock import mock_from_flow
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    try:
+        rule_id = mock_from_flow(db_path, flow_id, status_code=status_code)
+        click.echo(f"Mock rule {rule_id} created from flow {flow_id}.")
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Intercept group
+# ---------------------------------------------------------------------------
+
+@cli.group("intercept")
+def intercept_group():
+    """Manage intercept rules."""
+
+
+@intercept_group.command("add")
+@click.option("--db", default=None, help="Database path")
+@click.option("-d", "--domain", default=None, help="Domain to match")
+@click.option("-p", "--path", "path_pattern", default=None, help="Path pattern to match")
+@click.option("-m", "--method", default=None, help="HTTP method to match")
+def intercept_add_cmd(db, domain, path_pattern, method):
+    """Add an intercept rule."""
+    from troxy.core.intercept import add_intercept_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    rule_id = add_intercept_rule(db_path, domain=domain, path_pattern=path_pattern, method=method)
+    click.echo(f"Intercept rule {rule_id} added.")
+
+
+@intercept_group.command("list")
+@click.option("--db", default=None, help="Database path")
+@click.option("--no-color", is_flag=True, help="Disable color output")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def intercept_list_cmd(db, no_color, as_json):
+    """List intercept rules."""
+    import json as _json
+    from troxy.core.intercept import list_intercept_rules
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    rules = list_intercept_rules(db_path)
+    if as_json:
+        click.echo(_json.dumps(rules, indent=2, ensure_ascii=False, default=str))
+        return
+    if not rules:
+        click.echo("No intercept rules.")
+        return
+    for r in rules:
+        status_label = "enabled" if r["enabled"] else "disabled"
+        method_label = r["method"] or "*"
+        click.echo(f"[{r['id']}] {r['domain']} {r['path_pattern']} "
+                   f"method={method_label} ({status_label})")
+
+
+@intercept_group.command("remove")
+@click.option("--db", default=None, help="Database path")
+@click.argument("rule_id", type=int)
+def intercept_remove_cmd(db, rule_id):
+    """Remove an intercept rule."""
+    from troxy.core.intercept import remove_intercept_rule
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    remove_intercept_rule(db_path, rule_id)
+    click.echo(f"Intercept rule {rule_id} removed.")
+
+
+# ---------------------------------------------------------------------------
+# Pending flows commands
+# ---------------------------------------------------------------------------
+
+@cli.command("pending")
+@_common_options
+def pending_cmd(db, no_color):
+    """List pending (intercepted) flows awaiting release or drop."""
+    from troxy.core.intercept import list_pending_flows
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    flows = list_pending_flows(db_path)
+    if not flows:
+        click.echo("No pending flows.")
+        return
+    for f in flows:
+        click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} ({f['status']})")
+
+
+@cli.command("modify")
+@_common_options
+@click.argument("pending_id", type=int)
+@click.option("--header", "headers", multiple=True, help="Header to set (Key: Value)")
+@click.option("--body", "request_body", default=None, help="New request body")
+def modify_cmd(db, no_color, pending_id, headers, request_body):
+    """Modify a pending flow's request headers or body."""
+    import json as _json
+    from troxy.core.intercept import get_pending_flow, update_pending_flow
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    flow = get_pending_flow(db_path, pending_id)
+    if not flow:
+        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        sys.exit(1)
+    new_headers = None
+    if headers:
+        try:
+            existing = _json.loads(flow["request_headers"])
+        except Exception:
+            existing = {}
+        for h in headers:
+            if ":" in h:
+                k, v = h.split(":", 1)
+                existing[k.strip()] = v.strip()
+        new_headers = _json.dumps(existing)
+    update_pending_flow(db_path, pending_id,
+                        request_headers=new_headers,
+                        request_body=request_body)
+    click.echo(f"Pending flow {pending_id} modified.")
+
+
+@cli.command("release")
+@_common_options
+@click.argument("pending_id", type=int)
+def release_cmd(db, no_color, pending_id):
+    """Release a pending flow (mark as released)."""
+    from troxy.core.intercept import get_pending_flow, update_pending_flow
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    flow = get_pending_flow(db_path, pending_id)
+    if not flow:
+        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        sys.exit(1)
+    update_pending_flow(db_path, pending_id, status="released")
+    click.echo(f"Pending flow {pending_id} released.")
+
+
+@cli.command("drop")
+@_common_options
+@click.argument("pending_id", type=int)
+def drop_cmd(db, no_color, pending_id):
+    """Drop a pending flow (mark as dropped)."""
+    from troxy.core.intercept import get_pending_flow, update_pending_flow
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    flow = get_pending_flow(db_path, pending_id)
+    if not flow:
+        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        sys.exit(1)
+    update_pending_flow(db_path, pending_id, status="dropped")
+    click.echo(f"Pending flow {pending_id} dropped.")
+
+
+# ---------------------------------------------------------------------------
+# Replay command
+# ---------------------------------------------------------------------------
+
+@cli.command("replay")
+@_common_options
+@click.argument("flow_id", type=int)
+def replay_cmd(db, no_color, flow_id):
+    """Replay a captured flow by resending its request."""
+    import json as _json
+    import urllib.request
+    import urllib.error
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    flow = get_flow(db_path, flow_id)
+    if not flow:
+        click.echo(f"Flow {flow_id} not found.", err=True)
+        sys.exit(1)
+
+    scheme = flow.get("scheme", "https")
+    host = flow["host"]
+    port = flow.get("port", 443)
+    path = flow["path"]
+    query = flow.get("query")
+    url = f"{scheme}://{host}:{port}{path}"
+    if query:
+        url += f"?{query}"
+
+    method = flow["method"]
+    try:
+        headers = _json.loads(flow["request_headers"]) if flow["request_headers"] else {}
+    except Exception:
+        headers = {}
+
+    body = flow.get("request_body")
+    body_bytes = body.encode("utf-8") if body else None
+
+    req = urllib.request.Request(url, data=body_bytes, method=method)
+    for k, v in headers.items():
+        req.add_header(k, v)
+
+    click.echo(f"Replaying flow {flow_id}: {method} {url}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            click.echo(f"Response: {resp.status} {resp.reason}")
+    except urllib.error.HTTPError as e:
+        click.echo(f"Response: {e.code} {e.reason}")
+    except urllib.error.URLError as e:
+        click.echo(f"Error: {e.reason}", err=True)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Tail command
+# ---------------------------------------------------------------------------
+
+@cli.command("tail")
+@_common_options
+@click.option("-d", "--domain", default=None, help="Filter by domain")
+@click.option("-n", "--count", default=10, type=int, help="Initial lines to show")
+def tail_cmd(db, no_color, domain, count):
+    """Tail new flows in real time (polls DB every 0.5s)."""
+    import time as _time
+    _apply_no_color(no_color)
+    db_path = _resolve_db(db)
+    init_db(db_path)
+
+    # Show last N flows first
+    results = list_flows(db_path, domain=domain, limit=count)
+    last_id = 0
+    for f in results:
+        click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} -> {f['status_code']}")
+        if f["id"] > last_id:
+            last_id = f["id"]
+
+    click.echo("Tailing new flows... (Ctrl+C to stop)")
+    try:
+        while True:
+            _time.sleep(0.5)
+            conn = get_connection(db_path)
+            sql = "SELECT * FROM flows WHERE id > ?"
+            params = [last_id]
+            if domain:
+                sql += " AND host LIKE ?"
+                params.append(f"%{domain}%")
+            sql += " ORDER BY id"
+            rows = conn.execute(sql, params).fetchall()
+            conn.close()
+            for row in rows:
+                f = dict(row)
+                click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} -> {f['status_code']}")
+                if f["id"] > last_id:
+                    last_id = f["id"]
+    except KeyboardInterrupt:
+        pass
+
+
 if __name__ == "__main__":
     cli()
