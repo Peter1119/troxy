@@ -61,11 +61,11 @@ class TroxyAddon:
                 port=request.port,
                 path=request.path,
                 query=request.query if request.query else None,
-                request_headers=dict(request.headers),
+                request_headers={k: v for k, v in request.headers.items()},
                 request_body=request.content,
                 request_content_type=content_type_req or None,
                 status_code=response.status_code,
-                response_headers=dict(response.headers),
+                response_headers={k: v for k, v in response.headers.items()},
                 response_body=response.content,
                 response_content_type=content_type_resp or None,
                 duration_ms=duration,
@@ -109,7 +109,7 @@ class TroxyAddon:
                 method=flow.request.method,
                 host=flow.request.host,
                 path=flow.request.path,
-                request_headers=json.dumps(dict(flow.request.headers)),
+                request_headers=json.dumps({k: v for k, v in flow.request.headers.items()}),
                 request_body=flow.request.content.decode("utf-8", errors="replace") if flow.request.content else None,
             )
             self._intercepted_flows[flow.id] = flow
