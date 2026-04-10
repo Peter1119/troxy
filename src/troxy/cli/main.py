@@ -153,32 +153,30 @@ def clear_cmd(db, no_color, before, yes):
 @cli.command("start")
 @click.option("-p", "--port", default=8080, type=int, help="Proxy port")
 @click.option("--mode", default=None, help="Proxy mode (e.g. regular, transparent)")
-def start_cmd(port, mode):
-    """Start mitmproxy with troxy addon."""
+@click.option("-d", "--domain", default=None, help="Filter display by domain")
+@click.option("--mitmproxy", "use_mitmproxy", is_flag=True,
+              help="Use mitmproxy console TUI instead of troxy TUI")
+def start_cmd(port, mode, domain, use_mitmproxy):
+    """Start proxy with interactive flow inspector."""
     import shutil
-    import subprocess
 
     addon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "addon.py")
 
-    # Find mitmproxy in venv first, then PATH
-    venv_bin = os.path.join(os.path.dirname(sys.executable), "mitmproxy")
-    if os.path.exists(venv_bin):
-        mitmproxy_bin = venv_bin
-    else:
-        mitmproxy_bin = shutil.which("mitmproxy")
-    if not mitmproxy_bin:
-        click.echo("mitmproxy not found. Install: uv add mitmproxy", err=True)
-        sys.exit(1)
+    if use_mitmproxy:
+        venv_bin = os.path.join(os.path.dirname(sys.executable), "mitmproxy")
+        bin_path = venv_bin if os.path.exists(venv_bin) else shutil.which("mitmproxy")
+        if not bin_path:
+            click.echo("mitmproxy not found.", err=True)
+            sys.exit(1)
+        cmd = [bin_path, "-s", addon_path, "-p", str(port)]
+        if mode:
+            cmd.extend(["--mode", mode])
+        os.execvp(bin_path, cmd)
+        return
 
-    cmd = [mitmproxy_bin, "-s", addon_path, "-p", str(port)]
-    if mode:
-        cmd.extend(["--mode", mode])
-
-    click.echo(f"Starting mitmproxy on :{port} with troxy addon...")
-    click.echo(f"  DB: {os.environ.get('TROXY_DB', '~/.troxy/flows.db')}")
-    click.echo(f"  Addon: {addon_path}")
-    click.echo()
-    os.execvp(mitmproxy_bin, cmd)
+    db_path = os.environ.get("TROXY_DB", os.path.expanduser("~/.troxy/flows.db"))
+    from troxy.cli.tui_app import run_tui
+    run_tui(port=port, mode=mode, domain=domain, db_path=db_path)
 
 
 def _register_subgroups() -> None:
