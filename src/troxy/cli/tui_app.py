@@ -186,6 +186,7 @@ class TroxyApp(App):
         Binding("3", "tab_response", "Response", show=False, priority=True),
         Binding("left", "tab_prev", "← Prev tab", show=False, priority=True),
         Binding("right", "tab_next", "→ Next tab", show=False, priority=True),
+        Binding("s", "toggle_sort", "Sort", show=True, priority=True),
         Binding("c", "copy_tab", "Copy", show=True, priority=True),
         Binding("colon", "open_cmd", ":", show=False, priority=True),
     ]
@@ -212,6 +213,7 @@ class TroxyApp(App):
         self._filter_method: str = ""
         self._filter_status: str = ""
         self._proxy_exited = False
+        self._sort_desc = True  # True = newest first (default)
         self._local_ip = self._get_local_ip()
         self._in_detail = False
         self._detail_flow: dict | None = None
@@ -272,15 +274,13 @@ class TroxyApp(App):
         except Exception:
             return
         if new_rows:
-            table = self.query_one("#flow-table", DataTable)
             for row in new_rows:
                 f = dict(row)
                 self._all_flows.append(f)
                 if f["id"] > self._last_id:
                     self._last_id = f["id"]
-                if not self._in_detail and self._matches_filter(f):
-                    self._add_flow_row(table, f)
-            self._update_status()
+            if not self._in_detail:
+                self._apply_filter()
 
     # ── Table ──
 
@@ -321,9 +321,10 @@ class TroxyApp(App):
         table = self.query_one("#flow-table", DataTable)
         table.clear()
         self._flow_ids.clear()
-        for f in self._all_flows:
-            if self._matches_filter(f):
-                self._add_flow_row(table, f)
+        filtered = [f for f in self._all_flows if self._matches_filter(f)]
+        filtered.sort(key=lambda f: f.get("timestamp", 0), reverse=self._sort_desc)
+        for f in filtered:
+            self._add_flow_row(table, f)
         self._update_status()
 
     def _read_filter_inputs(self) -> None:
@@ -373,6 +374,14 @@ class TroxyApp(App):
         else:
             bar.add_class("visible")
             self.query_one("#filter-domain", Input).focus()
+
+    def action_toggle_sort(self) -> None:
+        if self._in_detail:
+            return
+        self._sort_desc = not self._sort_desc
+        order = "newest first" if self._sort_desc else "oldest first"
+        self.notify(f"Sort: {order}")
+        self._apply_filter()
 
     def action_clear_flows(self) -> None:
         if self._in_detail:
@@ -749,13 +758,14 @@ class TroxyApp(App):
                              self._filter_method, self._filter_status])
         count_text = f"{shown}/{total}" if filter_active else str(total)
         ip = f"  [dim bold]{self._local_ip}[/dim bold]" if self._local_ip else ""
+        sort_icon = "↓" if self._sort_desc else "↑"
         if self._in_detail:
             if self._focus_on_tabs:
                 bar.update(f" {proxy_text}  [dim]←→ Tab  ⏎ Enter  esc Exit[/dim]{ip}")
             else:
                 bar.update(f" {proxy_text}  [dim]1/2/3 Tab  c Copy  :c cURL  esc Back  q Quit[/dim]{ip}")
         else:
-            bar.update(f" {proxy_text}  {count_text} flows  [dim]⏎ Detail  f Filter  x Clear  q Quit[/dim]{ip}")
+            bar.update(f" {proxy_text}  {count_text} flows {sort_icon}  [dim]⏎ Detail  f Filter  s Sort  x Clear  q Quit[/dim]{ip}")
 
     def watch_flow_count(self, count: int) -> None:
         if not self._in_detail:
