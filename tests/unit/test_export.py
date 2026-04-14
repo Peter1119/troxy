@@ -36,7 +36,23 @@ def test_export_curl_post_with_body():
     )
     result = export_curl(flow)
     assert "-X POST" in result
-    assert "-d '{\"name\": \"test\"}'" in result
+    assert "--data-raw '{\"name\": \"test\"}'" in result
+
+
+def test_export_curl_escapes_shell_metacharacters():
+    import shlex
+    flow = _make_flow_row(
+        method="POST",
+        request_body="'; rm -rf /",
+        request_headers=json.dumps({"X-Injected": "value'; echo pwned"}),
+    )
+    result = export_curl(flow)
+    # Parsing the result back with shlex must give us exactly the original args —
+    # any injection would change the token boundaries.
+    tokens = shlex.split(result)
+    assert tokens[0] == "curl"
+    assert "'; rm -rf /" in tokens  # body preserved as one token
+    assert "X-Injected: value'; echo pwned" in tokens  # header preserved as one token
 
 
 def test_export_curl_custom_port():

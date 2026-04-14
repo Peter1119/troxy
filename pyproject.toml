@@ -17,7 +17,8 @@ dev = [
 ]
 
 [project.scripts]
-troxy = "troxy.cli.main:cli"
+troxy = "troxy.cli.main:_main"
+troxy-mcp = "troxy.mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
