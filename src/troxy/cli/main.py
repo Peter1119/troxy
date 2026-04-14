@@ -55,8 +55,9 @@ def flows_cmd(db, no_color, domain, status, method, path_filter, limit, since, a
 @click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.option("--export", "export_format", type=click.Choice(["curl", "httpie"]),
               default=None, help="Export format")
+@click.option("--no-hint", is_flag=True, help="Suppress Claude MCP hint at the bottom")
 def flow_cmd(db, no_color, flow_id, request_only, response_only, headers_only, body_only,
-             raw, as_json, export_format):
+             raw, as_json, export_format, no_hint):
     """Show flow details."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
@@ -83,8 +84,11 @@ def flow_cmd(db, no_color, flow_id, request_only, response_only, headers_only, b
         return
 
     from troxy.cli.formatting import print_flow_detail
+    from troxy.cli.hints import hints_enabled, flow_hint
     print_flow_detail(flow, request_only=request_only, response_only=response_only,
                       headers_only=headers_only, body_only=body_only)
+    if hints_enabled(cli_no_hint=no_hint) and not body_only and not headers_only:
+        click.echo(flow_hint(flow_id).format(status=flow["status_code"]))
 
 
 @cli.command("search")
@@ -187,6 +191,13 @@ def _register_subgroups() -> None:
     from troxy.cli.flow_cmds import (
         pending_cmd, modify_cmd, release_cmd, drop_cmd, replay_cmd, tail_cmd,
     )
+    from troxy.cli.setup_cmds import (
+        version_cmd, doctor_cmd, init_cmd, onboard_cmd, mcp_tools_cmd,
+    )
+    from troxy.cli.explain_cmds import quick_cmd, explain_cmd
+    from troxy.cli.alias_cmds import alias_group
+    from troxy.cli.session_cmds import session_group
+    from troxy.cli.pick_cmds import pick_cmd
     cli.add_command(mock_group)
     cli.add_command(intercept_group)
     cli.add_command(pending_cmd)
@@ -195,10 +206,30 @@ def _register_subgroups() -> None:
     cli.add_command(drop_cmd)
     cli.add_command(replay_cmd)
     cli.add_command(tail_cmd)
+    cli.add_command(version_cmd)
+    cli.add_command(doctor_cmd)
+    cli.add_command(init_cmd)
+    cli.add_command(onboard_cmd)
+    cli.add_command(mcp_tools_cmd)
+    cli.add_command(quick_cmd)
+    cli.add_command(explain_cmd)
+    cli.add_command(alias_group)
+    cli.add_command(session_group)
+    cli.add_command(pick_cmd)
 
 
 _register_subgroups()
 
 
-if __name__ == "__main__":
+def _main():
+    """Entry point with alias expansion before click parses."""
+    from troxy.cli.alias_cmds import resolve_alias_invocation
+    argv = sys.argv[1:]
+    expanded = resolve_alias_invocation(argv)
+    if expanded is not None:
+        sys.argv = [sys.argv[0]] + expanded
     cli()
+
+
+if __name__ == "__main__":
+    _main()

@@ -22,8 +22,10 @@ def mock_group():
 @click.option("-s", "--status", "status_code", default=200, type=int, help="Response status code")
 @click.option("--header", "headers", multiple=True, help="Response header (Key: Value)")
 @click.option("--body", "response_body", default=None, help="Response body")
-def mock_add_cmd(db, domain, path_pattern, method, status_code, headers, response_body):
+@click.option("--name", default=None, help="Optional name for easy toggle/remove (e.g. 'user-500')")
+def mock_add_cmd(db, domain, path_pattern, method, status_code, headers, response_body, name):
     """Add a mock rule."""
+    import sys
     from troxy.core.mock import add_mock_rule
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -35,16 +37,22 @@ def mock_add_cmd(db, domain, path_pattern, method, status_code, headers, respons
                 k, v = h.split(":", 1)
                 hdict[k.strip()] = v.strip()
         response_headers = _json.dumps(hdict)
-    rule_id = add_mock_rule(
-        db_path,
-        domain=domain,
-        path_pattern=path_pattern,
-        method=method,
-        status_code=status_code,
-        response_headers=response_headers,
-        response_body=response_body,
-    )
-    click.echo(f"Mock rule {rule_id} added.")
+    try:
+        rule_id = add_mock_rule(
+            db_path,
+            domain=domain,
+            path_pattern=path_pattern,
+            method=method,
+            status_code=status_code,
+            response_headers=response_headers,
+            response_body=response_body,
+            name=name,
+        )
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+    label = f"{rule_id} ({name!r})" if name else str(rule_id)
+    click.echo(f"Mock rule {label} added.")
 
 
 @mock_group.command("list")
@@ -66,42 +74,61 @@ def mock_list_cmd(db, no_color, as_json):
         return
     for r in rules:
         status_label = "enabled" if r["enabled"] else "disabled"
-        click.echo(f"[{r['id']}] {r['domain']} {r['path_pattern']} "
+        name_label = f" {r['name']!r}" if r.get("name") else ""
+        click.echo(f"[{r['id']}]{name_label} {r['domain']} {r['path_pattern']} "
                    f"-> {r['status_code']} ({status_label})")
 
 
 @mock_group.command("remove")
 @click.option("--db", default=None, help="Database path")
-@click.argument("rule_id", type=int)
-def mock_remove_cmd(db, rule_id):
-    """Remove a mock rule."""
-    from troxy.core.mock import remove_mock_rule
+@click.argument("rule_ref")
+def mock_remove_cmd(db, rule_ref):
+    """Remove a mock rule by ID or --name."""
+    import sys
+    from troxy.core.mock import remove_mock_rule, resolve_mock_ref
     db_path = _resolve_db(db)
     init_db(db_path)
+    try:
+        rule_id = resolve_mock_ref(db_path, rule_ref)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
     remove_mock_rule(db_path, rule_id)
     click.echo(f"Mock rule {rule_id} removed.")
 
 
 @mock_group.command("disable")
 @click.option("--db", default=None, help="Database path")
-@click.argument("rule_id", type=int)
-def mock_disable_cmd(db, rule_id):
-    """Disable a mock rule."""
-    from troxy.core.mock import toggle_mock_rule
+@click.argument("rule_ref")
+def mock_disable_cmd(db, rule_ref):
+    """Disable a mock rule by ID or name."""
+    import sys
+    from troxy.core.mock import toggle_mock_rule, resolve_mock_ref
     db_path = _resolve_db(db)
     init_db(db_path)
+    try:
+        rule_id = resolve_mock_ref(db_path, rule_ref)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
     toggle_mock_rule(db_path, rule_id, enabled=False)
     click.echo(f"Mock rule {rule_id} disabled.")
 
 
 @mock_group.command("enable")
 @click.option("--db", default=None, help="Database path")
-@click.argument("rule_id", type=int)
-def mock_enable_cmd(db, rule_id):
-    """Enable a mock rule."""
-    from troxy.core.mock import toggle_mock_rule
+@click.argument("rule_ref")
+def mock_enable_cmd(db, rule_ref):
+    """Enable a mock rule by ID or name."""
+    import sys
+    from troxy.core.mock import toggle_mock_rule, resolve_mock_ref
     db_path = _resolve_db(db)
     init_db(db_path)
+    try:
+        rule_id = resolve_mock_ref(db_path, rule_ref)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
     toggle_mock_rule(db_path, rule_id, enabled=True)
     click.echo(f"Mock rule {rule_id} enabled.")
 
@@ -119,6 +146,26 @@ def mock_from_flow_cmd(db, flow_id, status_code):
     try:
         rule_id = mock_from_flow(db_path, flow_id, status_code=status_code)
         click.echo(f"Mock rule {rule_id} created from flow {flow_id}.")
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+
+
+@mock_group.command("from-status")
+@click.option("--db", default=None, help="Database path")
+@click.argument("status", type=int)
+@click.option("-d", "--domain", default=None, help="Limit search to domain")
+def mock_from_status_cmd(db, status, domain):
+    """Create a mock rule from the most recent flow with the given status.
+
+    Example: `troxy mock from-status 401 -d api.example.com`
+    """
+    from troxy.core.mock import mock_from_status
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    try:
+        rule_id = mock_from_status(db_path, status, domain=domain)
+        click.echo(f"Mock rule {rule_id} created from latest {status} response.")
     except ValueError as e:
         click.echo(str(e), err=True)
         sys.exit(1)

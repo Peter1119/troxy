@@ -8,7 +8,18 @@ from rich.json import JSON
 from rich.table import Table
 from rich.text import Text
 
-console = Console(width=200)
+def _make_console() -> Console:
+    """Console that respects terminal width, falls back to 200 for piped/CI output."""
+    import shutil as _shutil
+    import sys as _sys
+    if _sys.stdout.isatty():
+        return Console()
+    # non-TTY: use detected width (helpful when piped into `less -S`), else wide default
+    width = _shutil.get_terminal_size((200, 24)).columns
+    return Console(width=max(width, 200), force_terminal=False)
+
+
+console = _make_console()
 
 METHOD_COLORS = {
     "GET": "green",
