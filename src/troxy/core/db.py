@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS mock_rules (
     response_headers TEXT,
     response_body TEXT,
     enabled INTEGER NOT NULL DEFAULT 1,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS intercept_rules (
@@ -74,11 +75,23 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 def init_db(db_path: str) -> None:
-    """Create database file, parent dirs, and all tables/indexes."""
+    """Create database file, parent dirs, and all tables/indexes.
+
+    Also runs idempotent ALTER TABLE migrations for columns added in later versions.
+    """
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = get_connection(db_path)
     conn.executescript(_SCHEMA_SQL)
+    _run_migrations(conn)
     conn.close()
+
+
+def _run_migrations(conn) -> None:
+    """Idempotent column-add migrations for existing DBs from older troxy versions."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(mock_rules)")}
+    if "name" not in existing:
+        conn.execute("ALTER TABLE mock_rules ADD COLUMN name TEXT")
+        conn.commit()
 
 
 def default_db_path() -> str:
