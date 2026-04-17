@@ -15,6 +15,7 @@ from troxy.core.intercept import (
 
 
 def handle_list_flows(db_path: str, args: dict) -> str:
+    since_seconds = _parse_since_arg(args.get("since"))
     results = list_flows(
         db_path,
         domain=args.get("domain"),
@@ -22,8 +23,25 @@ def handle_list_flows(db_path: str, args: dict) -> str:
         method=args.get("method"),
         path=args.get("path"),
         limit=args.get("limit", 10),
+        since_seconds=since_seconds,
     )
     return json.dumps(results, indent=2, default=str)
+
+
+def _parse_since_arg(since):
+    """Parse since string like '5m'. Returns None for missing/invalid."""
+    if not since or not isinstance(since, str):
+        return None
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    if since and since[-1] in units:
+        try:
+            value = float(since[:-1])
+            if value < 0:
+                return None
+            return value * units[since[-1]]
+        except ValueError:
+            return None
+    return None
 
 
 def handle_get_flow(db_path: str, args: dict) -> str:

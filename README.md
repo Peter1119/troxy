@@ -1,158 +1,165 @@
 # troxy
 
-> terminal + proxy = troxy
+> **terminal + proxy = troxy**
+> mitmproxy flow를 터미널 한 줄로 꺼내 쓰는 프록시 인스펙터. AI 쓰면 더 강해짐.
 
-mitmproxy가 캡처한 HTTP 트래픽을 CLI와 Claude MCP로 쉽게 조회하는 도구.
+mitmproxy로 캡처한 모든 HTTP flow를 SQLite에 기록하고, **CLI와 (선택적으로) Claude MCP**로 조회합니다. TUI 키 안 외워도 되고, Claude 안 써도 손해 없고, Claude 쓰면 "401 왜 떠?"에 flow 보고 답해줍니다.
 
-## 왜 만들었나
+## 이런 분들을 위한 물건
 
-mitmproxy TUI는 사람이 직접 조작하기엔 괜찮지만:
-- AI 에이전트(Claude 등)가 TUI를 조작할 수 없음 (키 입력 실패)
-- flow body 복사, 검색, 필터링이 번거로움
-- 스크립트로 자동화하기 어려움
+- **mitmproxy는 쓰지만 키바인딩 외우기 귀찮아서 read-only만 쓰는 분** → `troxy flows -s 401`, `troxy explain 42` 한 줄이면 끝.
+- **Charles/Proxyman 쓰다가 CLI로 넘어오려는 분** → GUI 없이도 `troxy quick` / `troxy explain`으로 한눈에 감 잡음.
+- **Claude Code를 매일 쓰는 프론트/모바일 개발자** → `troxy init` 한 번으로 Claude가 flow를 직접 읽음.
 
-troxy는 mitmproxy addon으로 모든 flow를 SQLite에 기록하고, CLI와 MCP로 조회합니다.
+## mitmproxy / Charles 대비
 
-## 설치
+| | Charles / Proxyman | mitmproxy TUI | **troxy** |
+|---|---|---|---|
+| 한 줄로 flow 꺼내기 | ❌ GUI 필수 | ⚠ 키바인딩 필요 | ⭕ `troxy quick 42` |
+| mock/intercept 한 줄 명령 | ❌ | ⚠ 모달 UI | ⭕ `troxy mock from-status 401` |
+| shell 조합 (grep, jq) | ❌ | ⚠ | ⭕ `troxy flows --json \| jq` |
+| AI로 자동 디버깅 | ❌ | ❌ | ⭕ MCP 17개 도구 |
+| 가격 | 유료 | 무료 | 무료 / MIT |
+
+## 60초 셋업
 
 ```bash
+# 1. 설치
 brew install Peter1119/troxy/troxy
+
+# 2. 가이드 온보딩 — CA 생성 → 신뢰 → 기기 프록시 설정까지 한 줄
+troxy start              # 첫 실행으로 CA 생성 (Ctrl+C)
+troxy onboard            # macOS keychain 신뢰 + 기기 설정 안내
+troxy doctor             # 환경 검증
+
+# 3. (선택) Claude MCP 등록 — AI 없이도 troxy 다 쓸 수 있음
+troxy init
 ```
 
-## 사용법
+### 첫 흐름 확인
 
 ```bash
-# 1. mitmproxy를 troxy addon과 함께 시작
-troxy start
-
-# 2. 앱을 프록시(8080 포트)를 통해 사용
-#    flow가 자동으로 ~/.troxy/flows.db에 기록됨
-
-# 3. 조회
-troxy flows                        # 전체 flow 목록
-troxy flows -d example.com         # 도메인 필터
-troxy flows -s 401                 # 상태코드 필터
-troxy flow 42 --body               # request/response body 확인
-troxy flow 42 --export curl        # curl 명령어로 변환
-troxy search "access_token"        # body 텍스트 검색
-troxy tail                         # 실시간 스트리밍
+troxy flows           # 최근 flow 목록
+troxy status          # 캡처된 수 / DB 크기
 ```
 
-## CLI 명령어
+### Claude에게 물어보기
 
-### 조회
+MCP 등록이 되어 있으면 Claude Code에서 바로:
 
+> "`api.example.com`에서 최근 5분 안에 401 떠?"
+> "그 flow의 response body 보여줘"
+> "위 요청을 curl로 뽑아줘"
+
+Claude가 `troxy_list_flows`, `troxy_get_flow`, `troxy_export` 도구를 체인해서 답합니다.
+
+## 핵심 명령어
+
+### 조회 (read-only 유저 입문 루트)
 ```bash
-troxy flows                        # flow 목록
-troxy flows -d example.com         # 도메인 필터 (부분 매칭)
-troxy flows -s 401                 # 상태코드 필터
-troxy flows -m POST                # HTTP 메서드 필터
-troxy flows -p /api/users          # 경로 필터
-troxy flows -n 5                   # 최대 5개
-troxy flows --since 5m             # 최근 5분
-troxy flows --json                 # JSON 출력
-
-troxy flow 42                      # flow 상세 (헤더 + body)
+troxy flows                        # 전체 flow
+troxy pick                         # ↑↓로 고르는 interactive picker (TTY)
+troxy flows -d example.com -s 401  # 도메인+상태코드 필터
+troxy flows -m POST --since 5m     # POST + 최근 5분
+troxy quick 42                     # 한 줄 요약 (mitmproxy Enter 대체)
+troxy explain 42                   # 자동 진단 (JWT 만료, Retry-After, Cache-Control, 5xx trace 등)
 troxy flow 42 --body               # body만
-troxy flow 42 --headers            # 헤더만
-troxy flow 42 --request            # request만
-troxy flow 42 --response           # response만
-troxy flow 42 --export curl        # curl로 변환
-troxy flow 42 --export httpie      # httpie로 변환
-
-troxy search "token"               # 전체 body에서 검색
-troxy search "token" -d example    # 도메인 범위 제한
-troxy search "email" --in request  # request body에서만 검색
-
-troxy tail                         # 실시간 flow 스트리밍
-troxy tail -d example.com          # 특정 도메인만 스트리밍
-troxy status                       # DB 상태 (flow 수, 크기)
-troxy clear --yes                  # 전체 삭제
+troxy flow 42 --export curl        # curl로 변환 (shell-safe quoting)
+troxy search "access_token"        # 전체 body 검색
+troxy tail -s 4xx                  # 4xx 실시간 스트리밍
 ```
 
-### Mock 응답
-
-서버에 요청을 보내지 않고 가짜 응답을 반환:
-
+### Session (프로젝트별 DB)
 ```bash
-troxy mock add -d api.example.com -p "/api/users/*" -s 200 \
-  --body '{"id": 1, "name": "mock"}'
-
-troxy mock from-flow 42            # 캡처된 flow의 응답을 mock으로 등록
-troxy mock list                    # mock 규칙 목록
-troxy mock disable 1               # 비활성화
-troxy mock enable 1                # 활성화
-troxy mock remove 1                # 삭제
+troxy session save example-debug /tmp/example.db
+troxy session list                 # 저장된 세션
+eval "$(troxy session use example-debug)"   # 현재 셸에서 TROXY_DB 세팅
 ```
 
-### 요청 가로채기
+### Alias (자주 쓰는 필터 단축어)
+```bash
+troxy alias add auth   "flows -s 401"
+troxy alias add slow   "flows --since 5m -m POST"
+troxy auth                         # `troxy flows -s 401` 실행
+troxy alias                        # 등록된 alias 목록
+```
 
-요청을 가로채서 수정 후 전송:
+### Mock (서버 대신 가짜 응답)
+```bash
+troxy mock from-status 401 -d api.example.com   # 최근 401을 한 줄로 mock화
+troxy mock from-flow 42                         # 특정 flow 재사용
+troxy mock add --name user-500 -d api.example.com -p "/api/users/*" -s 500 \
+  --body '{"error": "boom"}'
+troxy mock disable user-500                     # 이름으로 toggle
+troxy mock list
+```
 
+### Intercept (요청 가로채서 수정)
 ```bash
 troxy intercept add -d api.example.com -m POST
-troxy pending                      # 가로챈 요청 목록
+troxy pending                      # 가로챈 요청 대기열
 troxy modify 1 --header "Authorization: Bearer new_token"
-troxy release 1                    # 수정 후 전송
-troxy drop 1                       # 요청 취소
-troxy replay 42                    # 저장된 flow 다시 보내기
+troxy release 1                    # 수정 후 서버로 전송
+troxy drop 1                       # 취소
+troxy replay 42 --header "X-Debug: 1"  # 저장된 flow 재전송 + 헤더 오버라이드
 ```
 
-## Claude MCP 연동
-
-Claude Code에 MCP 서버를 등록하면, Claude가 mitmproxy flow를 직접 조회할 수 있습니다:
-
+### 관리
 ```bash
-claude mcp add -e TROXY_DB=~/.troxy/flows.db -s user troxy -- troxy-mcp
+troxy version                      # 버전/환경 정보
+troxy doctor                       # 설정 진단 (cert, MCP, DB)
+troxy onboard                      # 가이드 온보딩 (cert trust + 기기 프록시)
+troxy init                         # Claude MCP 자동 등록
+troxy mcp-tools                    # MCP 도구 목록 + 예시 프롬프트
+troxy clear --before 1h            # 1시간 이상 된 flow 삭제
 ```
 
-이후 Claude에게 자연어로 요청:
+### Body 크기 제한 (기본 1MB)
+대용량 응답으로 DB가 비대해지지 않도록 body 저장 시 자동 잘라냅니다.
+```bash
+TROXY_MAX_BODY=10MB troxy start    # 기본값 바꾸기
+TROXY_MAX_BODY=0 troxy start       # 제한 해제
+```
+**기존 DB는 영향 받지 않습니다** — 새로 들어오는 flow에만 적용됩니다.
 
-- "401 에러 나는 요청 보여줘"
-- "response body 확인해줘"
-- "access_token이 포함된 요청 찾아줘"
-- "curl로 변환해줘"
+## Claude MCP 도구 (17개)
 
 <details>
-<summary>MCP 도구 목록 (17개)</summary>
+<summary>펼치기</summary>
 
 | 도구 | 설명 |
 |------|------|
 | `troxy_status` | DB 상태 |
-| `troxy_list_flows` | flow 목록/필터 |
-| `troxy_get_flow` | flow 상세 |
-| `troxy_search` | body 검색 |
+| `troxy_list_flows` | flow 목록 (`since` 상대시간 지원) |
+| `troxy_get_flow` | flow 상세 (part: all/request/response/body) |
+| `troxy_search` | body + header 검색 |
 | `troxy_export` | curl/httpie 변환 |
-| `troxy_mock_add` | mock 규칙 추가 |
-| `troxy_mock_list` | mock 규칙 목록 |
-| `troxy_mock_remove` | mock 규칙 삭제 |
-| `troxy_mock_toggle` | mock 활성화/비활성화 |
-| `troxy_mock_from_flow` | flow에서 mock 생성 |
-| `troxy_intercept_add` | 가로채기 규칙 추가 |
-| `troxy_intercept_list` | 가로채기 규칙 목록 |
-| `troxy_intercept_remove` | 가로채기 규칙 삭제 |
-| `troxy_pending_list` | 대기 중인 flow 목록 |
-| `troxy_modify` | 대기 flow 수정 |
-| `troxy_release` | 대기 flow 전송 |
-| `troxy_drop` | 대기 flow 취소 |
+| `troxy_mock_add/list/remove/toggle/from_flow` | Mock 규칙 CRUD |
+| `troxy_intercept_add/list/remove` | Intercept 규칙 CRUD |
+| `troxy_pending_list` | 가로챈 flow 대기열 |
+| `troxy_modify/release/drop` | 가로챈 flow 제어 |
 
 </details>
 
-## 구조
+## 아키텍처
 
 ```
 mitmproxy -s troxy/addon.py
-         |
-    troxy addon (request/response hook)
-         | 기록
-         v
-    SQLite (~/.troxy/flows.db)
-         | 조회
-    +----+----+
-    v         v
-  troxy     troxy
-  CLI       MCP Server
+     │  (request/response hook)
+     ▼
+SQLite (~/.troxy/flows.db)
+     │
+   ┌─┴─┐
+   ▼   ▼
+  CLI  MCP Server
 ```
+
+레이어 규칙:
+- `src/troxy/core/`는 **mitmproxy import 금지** (순수 SQLite)
+- `addon.py`만 mitmproxy 의존
+- `cli`, `mcp`는 서로 의존하지 않고 `core`만 씀
+
+자세한 내용: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## 설정
 
@@ -161,6 +168,31 @@ mitmproxy -s troxy/addon.py
 | 1 | `--db` 플래그 |
 | 2 | `TROXY_DB` 환경변수 |
 | 3 | `~/.troxy/flows.db` (기본값) |
+
+## 보안 주의
+
+- **Authorization / Cookie / body에 든 비밀**이 그대로 SQLite에 평문 저장됩니다.
+- 공용 머신에서 쓸 때는 `troxy clear`로 주기적으로 비우거나 `TROXY_DB`로 분리하세요.
+- CI나 공유 저장소에 `~/.troxy/flows.db`를 커밋하지 마세요.
+
+## 트러블슈팅
+
+`troxy doctor`가 대부분 찾아줍니다. 자주 나오는 이슈:
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| 인증서 에러 | CA cert 미신뢰 | `troxy start` → `http://mitm.it`에서 cert 설치 |
+| `troxy-mcp not on PATH` | brew 아닌 설치 | `uv pip install -e .` 또는 재설치 |
+| Claude에서 MCP 안 보임 | 등록 scope 문제 | `troxy init --force --scope user` |
+
+## 개발
+
+```bash
+uv sync --all-extras
+uv run pytest                         # 76 tests
+uv run python scripts/lint_layers.py
+uv run python scripts/check_file_size.py
+```
 
 ## License
 

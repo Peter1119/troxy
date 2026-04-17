@@ -95,8 +95,15 @@ def drop_cmd(db, no_color, pending_id):
 @click.command("replay")
 @_common_options
 @click.argument("flow_id", type=int)
-def replay_cmd(db, no_color, flow_id):
-    """Replay a captured flow by resending its request."""
+@click.option("--header", "headers_override", multiple=True,
+              help="Override/add header (Key: Value). Can be repeated.")
+@click.option("--body", "body_override", default=None,
+              help="Override request body")
+@click.option("--no-body", "hide_body", is_flag=True,
+              help="Don't print response body (default: print)")
+def replay_cmd(db, no_color, flow_id, headers_override, body_override, hide_body):
+    """Replay a captured flow. Decodes base64 bodies, prints response body by default."""
+    import base64
     import urllib.request
     import urllib.error
     _apply_no_color(no_color)
@@ -109,10 +116,12 @@ def replay_cmd(db, no_color, flow_id):
 
     scheme = flow.get("scheme", "https")
     host = flow["host"]
-    port = flow.get("port", 443)
+    port = flow.get("port") or (443 if scheme == "https" else 80)
+    default_port = 443 if scheme == "https" else 80
+    host_part = f"{host}:{port}" if port != default_port else host
     path = flow["path"]
     query = flow.get("query")
-    url = f"{scheme}://{host}:{port}{path}"
+    url = f"{scheme}://{host_part}{path}"
     if query:
         url += f"?{query}"
 
@@ -122,8 +131,20 @@ def replay_cmd(db, no_color, flow_id):
     except Exception:
         headers = {}
 
-    body = flow.get("request_body")
-    body_bytes = body.encode("utf-8") if body else None
+    for h in headers_override:
+        if ":" in h:
+            k, v = h.split(":", 1)
+            headers[k.strip()] = v.strip()
+
+    body = body_override if body_override is not None else flow.get("request_body")
+    body_bytes = None
+    if body is not None:
+        if isinstance(body, str) and body.startswith("b64:"):
+            body_bytes = base64.b64decode(body[4:])
+        elif isinstance(body, str):
+            body_bytes = body.encode("utf-8")
+        else:
+            body_bytes = bytes(body)
 
     req = urllib.request.Request(url, data=body_bytes, method=method)
     for k, v in headers.items():
@@ -133,28 +154,66 @@ def replay_cmd(db, no_color, flow_id):
     try:
         with urllib.request.urlopen(req) as resp:
             click.echo(f"Response: {resp.status} {resp.reason}")
+            if not hide_body:
+                _print_replay_body(resp)
     except urllib.error.HTTPError as e:
         click.echo(f"Response: {e.code} {e.reason}")
+        if not hide_body:
+            _print_replay_body(e)
     except urllib.error.URLError as e:
         click.echo(f"Error: {e.reason}", err=True)
         sys.exit(1)
 
 
+def _print_replay_body(resp):
+    try:
+        data = resp.read()
+    except Exception:
+        return
+    if not data:
+        return
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        click.echo(f"(binary response, {len(data)} bytes)")
+        return
+    ct = resp.headers.get("Content-Type", "") if hasattr(resp, "headers") else ""
+    if "json" in ct:
+        try:
+            click.echo(json.dumps(json.loads(text), indent=2, ensure_ascii=False))
+            return
+        except Exception:
+            pass
+    # Truncate very long text
+    if len(text) > 8000:
+        click.echo(text[:8000])
+        click.echo(f"... ({len(text) - 8000} more bytes)")
+    else:
+        click.echo(text)
+
+
 @click.command("tail")
 @_common_options
 @click.option("-d", "--domain", default=None, help="Filter by domain")
+@click.option("-s", "--status", default=None,
+              help="Filter by status code (exact, e.g. 401) or class (e.g. 4xx, 5xx)")
+@click.option("-m", "--method", default=None, help="Filter by HTTP method")
 @click.option("-n", "--count", default=10, type=int, help="Initial lines to show")
-def tail_cmd(db, no_color, domain, count):
+def tail_cmd(db, no_color, domain, status, method, count):
     """Tail new flows in real time (polls DB every 0.5s)."""
     import time as _time
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
 
-    results = list_flows(db_path, domain=domain, limit=count)
+    status_exact, status_class = _parse_status_filter(status)
+
+    results = list_flows(db_path, domain=domain, status=status_exact, method=method,
+                         limit=count)
+    results = [f for f in results if _matches_status_class(f, status_class)]
     last_id = 0
     for f in results:
-        click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} -> {f['status_code']}")
+        _emit_tail(f)
         if f["id"] > last_id:
             last_id = f["id"]
 
@@ -168,15 +227,46 @@ def tail_cmd(db, no_color, domain, count):
             if domain:
                 sql += " AND host LIKE ?"
                 params.append(f"%{domain}%")
+            if status_exact is not None:
+                sql += " AND status_code = ?"
+                params.append(status_exact)
+            if method:
+                sql += " AND method = ?"
+                params.append(method.upper())
             sql += " ORDER BY id"
             rows = conn.execute(sql, params).fetchall()
             conn.close()
             for row in rows:
                 f = dict(row)
-                click.echo(
-                    f"[{f['id']}] {f['method']} {f['host']}{f['path']} -> {f['status_code']}"
-                )
+                if not _matches_status_class(f, status_class):
+                    continue
+                _emit_tail(f)
                 if f["id"] > last_id:
                     last_id = f["id"]
     except KeyboardInterrupt:
         pass
+
+
+def _parse_status_filter(status):
+    """Parse '401' → (401, None); '4xx' → (None, 4); None → (None, None)."""
+    if not status:
+        return None, None
+    s = status.lower()
+    if len(s) == 3 and s.endswith("xx") and s[0].isdigit():
+        return None, int(s[0])
+    try:
+        return int(status), None
+    except ValueError:
+        raise click.BadParameter(
+            f"Invalid status filter: {status!r}. Use 401 or 4xx."
+        )
+
+
+def _matches_status_class(flow, status_class):
+    if status_class is None:
+        return True
+    return flow["status_code"] // 100 == status_class
+
+
+def _emit_tail(f):
+    click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} -> {f['status_code']}")

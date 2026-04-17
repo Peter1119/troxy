@@ -2,15 +2,42 @@
 
 import base64
 import json
+import os
 
 from troxy.core.db import get_connection
 
 
+def _max_body_bytes() -> int | None:
+    """Parse TROXY_MAX_BODY env (e.g. '1MB', '500KB', '0' for unlimited).
+
+    Default: 1MB. Only applied to new writes — historical flows are never retroactively truncated.
+    """
+    raw = os.environ.get("TROXY_MAX_BODY", "1MB").strip().upper()
+    if raw in ("0", "OFF", "NONE", "UNLIMITED"):
+        return None
+    units = {"B": 1, "KB": 1024, "MB": 1024 * 1024, "GB": 1024 * 1024 * 1024}
+    for suffix, mult in units.items():
+        if raw.endswith(suffix):
+            try:
+                return int(float(raw[:-len(suffix)]) * mult)
+            except ValueError:
+                return 1024 * 1024
+    try:
+        return int(raw)
+    except ValueError:
+        return 1024 * 1024
+
+
 def _encode_body(body, content_type: str | None) -> str | None:
-    """Encode body for storage. Text as-is, binary as b64:..."""
+    """Encode body for storage. Text as-is, binary as b64:..., truncated per TROXY_MAX_BODY."""
     if body is None:
         return None
+    max_bytes = _max_body_bytes()
     if isinstance(body, bytes):
+        truncated = False
+        if max_bytes is not None and len(body) > max_bytes:
+            body = body[:max_bytes]
+            truncated = True
         if content_type and (
             content_type.startswith("text/")
             or "json" in content_type
@@ -19,11 +46,17 @@ def _encode_body(body, content_type: str | None) -> str | None:
             or "html" in content_type
         ):
             try:
-                return body.decode("utf-8")
+                text = body.decode("utf-8", errors="replace")
+                return text + f"\n[truncated at {max_bytes}B]" if truncated else text
             except UnicodeDecodeError:
                 pass
-        return "b64:" + base64.b64encode(body).decode("ascii")
-    return str(body)
+        encoded = "b64:" + base64.b64encode(body).decode("ascii")
+        return encoded + f"\n[truncated at {max_bytes}B]" if truncated else encoded
+    s = str(body)
+    if max_bytes is not None and len(s.encode("utf-8", errors="replace")) > max_bytes:
+        return s.encode("utf-8", errors="replace")[:max_bytes].decode("utf-8", errors="replace") \
+            + f"\n[truncated at {max_bytes}B]"
+    return s
 
 
 def _encode_headers(headers) -> str:

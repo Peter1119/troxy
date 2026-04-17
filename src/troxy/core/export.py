@@ -1,6 +1,7 @@
 """Export flows to curl/httpie format."""
 
 import json
+import shlex
 
 
 def _build_url(flow: dict) -> str:
@@ -27,50 +28,61 @@ def _parse_headers(flow: dict) -> dict:
     return dict(headers)
 
 
+def _decode_body_for_export(body) -> str | None:
+    """Return text body suitable for shell export. Skips b64 binary bodies."""
+    if body is None:
+        return None
+    if isinstance(body, str) and body.startswith("b64:"):
+        return None
+    return body if isinstance(body, str) else str(body)
+
+
 def export_curl(flow: dict) -> str:
-    """Export flow as a curl command."""
+    """Export flow as a curl command with safe shell quoting."""
     url = _build_url(flow)
     method = flow["method"]
     headers = _parse_headers(flow)
-    body = flow.get("request_body")
+    body = _decode_body_for_export(flow.get("request_body"))
 
     parts = ["curl"]
     if method != "GET":
-        parts.append(f"-X {method}")
+        parts.extend(["-X", method])
 
     for key, value in headers.items():
-        parts.append(f"-H '{key}: {value}'")
+        parts.extend(["-H", shlex.quote(f"{key}: {value}")])
 
-    if body:
-        parts.append(f"-d '{body}'")
+    if body is not None:
+        parts.extend(["--data-raw", shlex.quote(body)])
 
-    parts.append(f"'{url}'")
+    parts.append(shlex.quote(url))
     return " ".join(parts)
 
 
 def export_httpie(flow: dict) -> str:
-    """Export flow as an httpie command."""
+    """Export flow as an httpie command with safe shell quoting."""
     url = _build_url(flow)
     method = flow["method"]
     headers = _parse_headers(flow)
-    body = flow.get("request_body")
+    body = _decode_body_for_export(flow.get("request_body"))
 
-    parts = ["http", method, url]
+    parts = ["http", method, shlex.quote(url)]
 
     for key, value in headers.items():
-        parts.append(f"{key}:{value}")
+        parts.append(shlex.quote(f"{key}:{value}"))
 
-    if body:
+    if body is not None:
         try:
-            json.loads(body)
-            parts = ["http", "--json", method, url]
-            for key, value in headers.items():
-                if key.lower() != "content-type":
-                    parts.append(f"{key}:{value}")
             parsed = json.loads(body)
-            for k, v in parsed.items():
-                parts.append(f"{k}={json.dumps(v)}")
+            if isinstance(parsed, dict):
+                parts = ["http", "--json", method, shlex.quote(url)]
+                for key, value in headers.items():
+                    if key.lower() != "content-type":
+                        parts.append(shlex.quote(f"{key}:{value}"))
+                for k, v in parsed.items():
+                    parts.append(shlex.quote(f"{k}={json.dumps(v, ensure_ascii=False)}"))
+            else:
+                parts.extend(["--raw", shlex.quote(body)])
         except (json.JSONDecodeError, TypeError):
-            parts.append(f"--raw '{body}'")
+            parts.extend(["--raw", shlex.quote(body)])
 
     return " ".join(parts)
