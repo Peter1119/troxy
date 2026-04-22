@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 
 from troxy.core.db import default_db_path, init_db, get_connection
+from troxy.cli.setup_helpers import generate_ca_cert, print_device_hints
 
 
 _EXAMPLE_PROMPTS = {
@@ -100,7 +101,7 @@ def doctor_cmd():
     check(
         f"mitmproxy CA cert at {cert_path}",
         cert_path.exists(),
-        "Start mitmproxy once (`troxy start`) to generate certs, then trust them via http://mitm.it",
+        "Run `troxy onboard` to auto-generate the CA and (on macOS) trust it in the system keychain.",
     )
 
     # 4. troxy-mcp command available
@@ -142,8 +143,14 @@ def onboard_cmd(skip_trust, platform):
     ca = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
     if not ca.exists():
         click.echo("Step 1/3: mitmproxy CA cert not found — generating now...")
-        if not _generate_ca_cert(ca):
+        success, stderr = generate_ca_cert(ca)
+        if not success:
             click.echo(f"  ✗ Failed to auto-generate CA at {ca}")
+            lower = stderr.lower()
+            if "address already in use" in lower or "bind" in lower:
+                click.echo("      Port 19481 is in use. Check with `lsof -i :19481`, kill the blocker, retry.")
+            elif stderr:
+                click.echo(f"      mitmdump stderr: {stderr[:200]}")
             click.echo("      Fallback: run `troxy start` once, Ctrl+C, then rerun `troxy onboard`.")
             sys.exit(1)
         click.echo(f"  ✓ Step 1/3: CA cert generated at {ca}")
@@ -159,7 +166,8 @@ def onboard_cmd(skip_trust, platform):
     else:
         click.echo("  → Step 2/3: adding CA to macOS keychain (sudo required)")
         result = subprocess.run(
-            ["sudo", "security", "add-trusted-cert", "-d", "-r", "trustRoot",
+            ["sudo", "security", "add-trusted-cert", "-d",
+             "-p", "ssl", "-p", "basic",
              "-k", "/Library/Keychains/System.keychain", str(ca)],
             capture_output=True, text=True,
         )
@@ -171,77 +179,13 @@ def onboard_cmd(skip_trust, platform):
 
     # Step 3: Device proxy configuration
     click.echo("\nStep 3/3: configure your device/simulator proxy to 127.0.0.1:8080")
-    _print_device_hints(platform)
+    print_device_hints(platform)
 
     click.echo(
         "\nDone. Run `troxy start` to capture flows, "
         "then `troxy flows` / `troxy explain <id>`.\n"
         "Bonus: run `troxy init` to let Claude Code query your flows via MCP.\n"
     )
-
-
-def _generate_ca_cert(ca_path: Path, timeout: float = 8.0) -> bool:
-    """Boot mitmdump briefly so mitmproxy writes its CA cert, then stop it.
-
-    Returns True if the cert appears within `timeout` seconds.
-    """
-    import time
-
-    mitmdump = shutil.which("mitmdump")
-    venv_mitmdump = os.path.join(os.path.dirname(sys.executable), "mitmdump")
-    if os.path.exists(venv_mitmdump):
-        mitmdump = venv_mitmdump
-    if not mitmdump:
-        return False
-
-    ca_path.parent.mkdir(parents=True, exist_ok=True)
-    # Use an unlikely port so we don't collide with an active proxy.
-    proc = subprocess.Popen(
-        [mitmdump, "--listen-port", "19481", "-q"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    try:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if ca_path.exists():
-                return True
-            time.sleep(0.2)
-        return ca_path.exists()
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-
-def _print_device_hints(platform: str | None):
-    ios_hint = (
-        "  iOS Simulator (macOS):\n"
-        "    xcrun simctl boot 'iPhone 15'  # if not running\n"
-        "    open -a Simulator\n"
-        "    Settings → Wi-Fi → (i) → Configure Proxy → Manual\n"
-        "        Server: 127.0.0.1   Port: 8080\n"
-    )
-    android_hint = (
-        "  Android Emulator:\n"
-        "    emulator -avd <name> -http-proxy http://127.0.0.1:8080\n"
-        "    Or in running emulator: Settings → Network → APN → Proxy\n"
-    )
-    generic = (
-        "  Physical device:\n"
-        "    Wi-Fi settings → HTTP proxy → Manual → 127.0.0.1 / 8080\n"
-        "    Install CA from http://mitm.it while proxied\n"
-    )
-    if platform == "ios-sim":
-        click.echo(ios_hint)
-    elif platform == "android-emu":
-        click.echo(android_hint)
-    elif platform == "manual":
-        click.echo(generic)
-    else:
-        click.echo(ios_hint + "\n" + android_hint + "\n" + generic)
 
 
 @click.command("init")
