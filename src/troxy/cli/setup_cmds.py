@@ -138,14 +138,17 @@ def onboard_cmd(skip_trust, platform):
     """
     click.echo("troxy onboard — guided setup\n")
 
-    # Step 1: Ensure CA cert exists
+    # Step 1: Ensure CA cert exists — generate automatically if missing
     ca = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
     if not ca.exists():
-        click.echo(f"Step 1/3: mitmproxy CA cert not found at {ca}")
-        click.echo("  Run `troxy start` once, then Ctrl+C, to generate it.")
-        click.echo("  Then rerun `troxy onboard`.\n")
-        sys.exit(1)
-    click.echo(f"  ✓ Step 1/3: CA cert present at {ca}")
+        click.echo("Step 1/3: mitmproxy CA cert not found — generating now...")
+        if not _generate_ca_cert(ca):
+            click.echo(f"  ✗ Failed to auto-generate CA at {ca}")
+            click.echo("      Fallback: run `troxy start` once, Ctrl+C, then rerun `troxy onboard`.")
+            sys.exit(1)
+        click.echo(f"  ✓ Step 1/3: CA cert generated at {ca}")
+    else:
+        click.echo(f"  ✓ Step 1/3: CA cert present at {ca}")
 
     # Step 2: Trust in macOS keychain
     if skip_trust:
@@ -175,6 +178,42 @@ def onboard_cmd(skip_trust, platform):
         "then `troxy flows` / `troxy explain <id>`.\n"
         "Bonus: run `troxy init` to let Claude Code query your flows via MCP.\n"
     )
+
+
+def _generate_ca_cert(ca_path: Path, timeout: float = 8.0) -> bool:
+    """Boot mitmdump briefly so mitmproxy writes its CA cert, then stop it.
+
+    Returns True if the cert appears within `timeout` seconds.
+    """
+    import time
+
+    mitmdump = shutil.which("mitmdump")
+    venv_mitmdump = os.path.join(os.path.dirname(sys.executable), "mitmdump")
+    if os.path.exists(venv_mitmdump):
+        mitmdump = venv_mitmdump
+    if not mitmdump:
+        return False
+
+    ca_path.parent.mkdir(parents=True, exist_ok=True)
+    # Use an unlikely port so we don't collide with an active proxy.
+    proc = subprocess.Popen(
+        [mitmdump, "--listen-port", "19481", "-q"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if ca_path.exists():
+                return True
+            time.sleep(0.2)
+        return ca_path.exists()
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def _print_device_hints(platform: str | None):
