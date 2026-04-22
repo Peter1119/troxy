@@ -10,7 +10,7 @@ TOOL_SCHEMAS = {
         "schema": {
             "type": "object",
             "properties": {
-                "domain": {"type": "string", "description": "Filter by domain (partial match, e.g. 'example')"},
+                "domain": {"type": "string", "description": "Filter by domain (partial match, e.g. 'example.com')"},
                 "status": {"type": "integer", "description": "Filter by HTTP status code (e.g. 401)"},
                 "method": {"type": "string", "description": "Filter by HTTP method (e.g. POST)"},
                 "path": {"type": "string", "description": "Filter by path (partial match)"},

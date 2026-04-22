@@ -4,10 +4,10 @@ Stores named DB paths in ~/.troxy/sessions.json (permissions 0600).
 Switching sessions sets TROXY_DB via a small shell eval pattern.
 
 Usage:
-  troxy session save example-debug /tmp/example.db
+  troxy session save api-debug /tmp/api.db
   troxy session list
-  troxy session use example-debug          # prints export command
-  eval "$(troxy session use example-debug)"  # activates in current shell
+  troxy session use api-debug          # prints export command
+  eval "$(troxy session use api-debug)"  # activates in current shell
 """
 
 import json

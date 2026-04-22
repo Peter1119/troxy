@@ -15,21 +15,21 @@ def create_auth_failure(path: str):
     init_db(path)
     now = time.time()
     insert_flow(path, timestamp=now - 10, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/home", query=None,
+                host="api.internal.com", port=443, path="/api/home", query=None,
                 request_headers={"Authorization": "Bearer valid_token"},
                 request_body=None, request_content_type=None,
                 status_code=200, response_headers={"Content-Type": "application/json"},
                 response_body='{"sections": []}', response_content_type="application/json",
                 duration_ms=120)
     insert_flow(path, timestamp=now - 5, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/users/17ov/ratings", query=None,
+                host="api.internal.com", port=443, path="/api/users/17ov/ratings", query=None,
                 request_headers={"Authorization": "Bearer expired_token"},
                 request_body=None, request_content_type=None,
                 status_code=401, response_headers={"Content-Type": "application/json"},
                 response_body='{"error": "unauthorized", "message": "Token has expired"}',
                 response_content_type="application/json", duration_ms=30)
     insert_flow(path, timestamp=now, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/users/17ov/report", query=None,
+                host="api.internal.com", port=443, path="/api/users/17ov/report", query=None,
                 request_headers={"Authorization": "Bearer expired_token"},
                 request_body=None, request_content_type=None,
                 status_code=401, response_headers={"Content-Type": "application/json"},
@@ -43,10 +43,10 @@ def create_redirect_chain(path: str):
     insert_flow(path, timestamp=now - 2, method="GET", scheme="https",
                 host="mandrillapp.com", port=443, path="/track/click/abc", query=None,
                 request_headers={}, request_body=None, request_content_type=None,
-                status_code=302, response_headers={"Location": "https://staging-api.example.com/confirm"},
+                status_code=302, response_headers={"Location": "https://staging-api.internal.com/confirm"},
                 response_body=None, response_content_type=None, duration_ms=50)
     insert_flow(path, timestamp=now - 1, method="GET", scheme="https",
-                host="staging-api.example.com", port=443, path="/confirm", query=None,
+                host="staging-api.internal.com", port=443, path="/confirm", query=None,
                 request_headers={}, request_body=None, request_content_type=None,
                 status_code=302, response_headers={"Location": "https://accounts.google.com/oauth"},
                 response_body=None, response_content_type=None, duration_ms=40)

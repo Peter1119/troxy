@@ -32,7 +32,7 @@ def _seed(db_path):
                 response_body='{"users": []}', response_content_type="application/json",
                 duration_ms=42.0)
     insert_flow(db_path, timestamp=now, method="POST", scheme="https",
-                host="api.example.com", port=443, path="/api/users", query=None,
+                host="api.internal.com", port=443, path="/api/users", query=None,
                 request_headers={"Content-Type": "application/json"},
                 request_body='{"email": "test@test.com"}',
                 request_content_type="application/json", status_code=401,
@@ -46,13 +46,13 @@ def test_flows_lists_all(tmp_db):
     result = _run_troxy("flows", "--no-color", db_path=tmp_db)
     assert result.returncode == 0
     assert "api.example.com" in result.stdout
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_flows_filter_domain(tmp_db):
     _seed(tmp_db)
-    result = _run_troxy("flows", "-d", "example", "--no-color", db_path=tmp_db)
-    assert "api.example.com" in result.stdout
+    result = _run_troxy("flows", "-d", "internal", "--no-color", db_path=tmp_db)
+    assert "api.internal.com" in result.stdout
     assert "api.example.com" not in result.stdout
 
 
@@ -74,7 +74,7 @@ def test_flow_detail(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("flow", "2", "--no-color", db_path=tmp_db)
     assert result.returncode == 0
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
     assert "unauthorized" in result.stdout
 
 
@@ -88,7 +88,7 @@ def test_flow_export_curl(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("flow", "2", "--export", "curl", db_path=tmp_db)
     assert "curl" in result.stdout
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_flow_not_found(tmp_db):
@@ -100,7 +100,7 @@ def test_flow_not_found(tmp_db):
 def test_search(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("search", "unauthorized", "--no-color", db_path=tmp_db)
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_status(tmp_db):

@@ -475,7 +475,7 @@ def test_insert_flow_stores_all_fields(tmp_db):
     init_db(tmp_db)
     flow_data = _make_flow(
         method="POST",
-        host="api.example.com",
+        host="api.internal.com",
         path="/api/users",
         status_code=401,
         response_body='{"error": "unauthorized"}',
@@ -484,7 +484,7 @@ def test_insert_flow_stores_all_fields(tmp_db):
     conn = get_connection(tmp_db)
     row = conn.execute("SELECT * FROM flows WHERE id = ?", (flow_id,)).fetchone()
     assert row["method"] == "POST"
-    assert row["host"] == "api.example.com"
+    assert row["host"] == "api.internal.com"
     assert row["status_code"] == 401
     assert row["response_body"] == '{"error": "unauthorized"}'
     conn.close()
@@ -681,7 +681,7 @@ def _seed_flows(db_path):
          "response_body": '{"users": []}', "timestamp": now - 300},
         {"method": "POST", "host": "api.example.com", "path": "/users", "status_code": 201,
          "request_body": '{"name": "test"}', "response_body": '{"id": 1}', "timestamp": now - 200},
-        {"method": "GET", "host": "api.example.com", "path": "/api/ratings", "status_code": 401,
+        {"method": "GET", "host": "api.internal.com", "path": "/api/ratings", "status_code": 401,
          "response_body": '{"error": "unauthorized", "token": "expired"}', "timestamp": now - 100},
         {"method": "GET", "host": "cdn.example.com", "path": "/image.png", "status_code": 200,
          "response_body": "b64:iVBORw0KGgo=", "response_content_type": "image/png", "timestamp": now},
@@ -719,9 +719,9 @@ def test_list_flows_ordered_by_timestamp_desc(tmp_db):
 
 def test_list_flows_filter_by_domain(tmp_db):
     _seed_flows(tmp_db)
-    flows = list_flows(tmp_db, domain="example")
+    flows = list_flows(tmp_db, domain="internal")
     assert len(flows) == 1
-    assert flows[0]["host"] == "api.example.com"
+    assert flows[0]["host"] == "api.internal.com"
 
 
 def test_list_flows_filter_by_status(tmp_db):
@@ -759,7 +759,7 @@ def test_list_flows_filter_by_since(tmp_db):
 def test_get_flow_by_id(tmp_db):
     ids = _seed_flows(tmp_db)
     flow = get_flow(tmp_db, ids[2])
-    assert flow["host"] == "api.example.com"
+    assert flow["host"] == "api.internal.com"
     assert flow["status_code"] == 401
     assert "unauthorized" in flow["response_body"]
 
@@ -774,7 +774,7 @@ def test_search_flows_in_body(tmp_db):
     _seed_flows(tmp_db)
     results = search_flows(tmp_db, "unauthorized")
     assert len(results) == 1
-    assert results[0]["host"] == "api.example.com"
+    assert results[0]["host"] == "api.internal.com"
 
 
 def test_search_flows_in_request_body(tmp_db):
@@ -786,7 +786,7 @@ def test_search_flows_in_request_body(tmp_db):
 
 def test_search_flows_with_domain_filter(tmp_db):
     _seed_flows(tmp_db)
-    results = search_flows(tmp_db, "token", domain="example")
+    results = search_flows(tmp_db, "token", domain="internal")
     assert len(results) == 1
 
 
@@ -1160,7 +1160,7 @@ def _seed(db_path):
                 response_body='{"users": []}', response_content_type="application/json",
                 duration_ms=42.0)
     insert_flow(db_path, timestamp=now, method="POST", scheme="https",
-                host="api.example.com", port=443, path="/api/users", query=None,
+                host="api.internal.com", port=443, path="/api/users", query=None,
                 request_headers={"Content-Type": "application/json"},
                 request_body='{"email": "test@test.com"}',
                 request_content_type="application/json", status_code=401,
@@ -1174,13 +1174,13 @@ def test_flows_lists_all(tmp_db):
     result = _run_troxy("flows", "--no-color", db_path=tmp_db)
     assert result.returncode == 0
     assert "api.example.com" in result.stdout
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_flows_filter_domain(tmp_db):
     _seed(tmp_db)
-    result = _run_troxy("flows", "-d", "example", "--no-color", db_path=tmp_db)
-    assert "api.example.com" in result.stdout
+    result = _run_troxy("flows", "-d", "internal", "--no-color", db_path=tmp_db)
+    assert "api.internal.com" in result.stdout
     assert "api.example.com" not in result.stdout
 
 
@@ -1188,7 +1188,7 @@ def test_flows_filter_status(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("flows", "-s", "401", "--no-color", db_path=tmp_db)
     assert "401" in result.stdout
-    assert "200" not in result.stdout or "api.example.com" in result.stdout
+    assert "200" not in result.stdout or "api.internal.com" in result.stdout
 
 
 def test_flows_json_output(tmp_db):
@@ -1203,7 +1203,7 @@ def test_flow_detail(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("flow", "2", "--no-color", db_path=tmp_db)
     assert result.returncode == 0
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
     assert "unauthorized" in result.stdout
 
 
@@ -1217,7 +1217,7 @@ def test_flow_export_curl(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("flow", "2", "--export", "curl", db_path=tmp_db)
     assert "curl" in result.stdout
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_flow_not_found(tmp_db):
@@ -1229,7 +1229,7 @@ def test_flow_not_found(tmp_db):
 def test_search(tmp_db):
     _seed(tmp_db)
     result = _run_troxy("search", "unauthorized", "--no-color", db_path=tmp_db)
-    assert "api.example.com" in result.stdout
+    assert "api.internal.com" in result.stdout
 
 
 def test_status(tmp_db):
@@ -2762,7 +2762,7 @@ def _seed(db_path):
                 response_body='{"users": []}', response_content_type="application/json",
                 duration_ms=42.0)
     insert_flow(db_path, timestamp=time.time(), method="POST", scheme="https",
-                host="api.example.com", port=443, path="/api/users", query=None,
+                host="api.internal.com", port=443, path="/api/users", query=None,
                 request_headers={"Content-Type": "application/json"},
                 request_body='{"email": "test@test.com"}',
                 request_content_type="application/json", status_code=401,
@@ -2780,7 +2780,7 @@ def test_handle_list_flows(tmp_db):
 
 def test_handle_list_flows_with_filter(tmp_db):
     _seed(tmp_db)
-    result = handle_list_flows(tmp_db, {"domain": "example"})
+    result = handle_list_flows(tmp_db, {"domain": "internal"})
     data = json.loads(result)
     assert len(data) == 1
 
@@ -2789,7 +2789,7 @@ def test_handle_get_flow(tmp_db):
     _seed(tmp_db)
     result = handle_get_flow(tmp_db, {"id": 2})
     data = json.loads(result)
-    assert data["host"] == "api.example.com"
+    assert data["host"] == "api.internal.com"
     assert "unauthorized" in data["response_body"]
 
 
@@ -3385,7 +3385,7 @@ def create_auth_failure(path: str):
     now = time.time()
     # Normal successful request
     insert_flow(path, timestamp=now - 10, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/home", query=None,
+                host="api.internal.com", port=443, path="/api/home", query=None,
                 request_headers={"Authorization": "Bearer valid_token"},
                 request_body=None, request_content_type=None,
                 status_code=200, response_headers={"Content-Type": "application/json"},
@@ -3393,7 +3393,7 @@ def create_auth_failure(path: str):
                 duration_ms=120)
     # Failed auth request
     insert_flow(path, timestamp=now - 5, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/users/17ov/ratings", query=None,
+                host="api.internal.com", port=443, path="/api/users/17ov/ratings", query=None,
                 request_headers={"Authorization": "Bearer expired_token"},
                 request_body=None, request_content_type=None,
                 status_code=401, response_headers={"Content-Type": "application/json"},
@@ -3401,7 +3401,7 @@ def create_auth_failure(path: str):
                 response_content_type="application/json", duration_ms=30)
     # Another failed request
     insert_flow(path, timestamp=now, method="GET", scheme="https",
-                host="api.example.com", port=443, path="/api/users/17ov/report", query=None,
+                host="api.internal.com", port=443, path="/api/users/17ov/report", query=None,
                 request_headers={"Authorization": "Bearer expired_token"},
                 request_body=None, request_content_type=None,
                 status_code=401, response_headers={"Content-Type": "application/json"},
@@ -3416,10 +3416,10 @@ def create_redirect_chain(path: str):
     insert_flow(path, timestamp=now - 2, method="GET", scheme="https",
                 host="mandrillapp.com", port=443, path="/track/click/abc", query=None,
                 request_headers={}, request_body=None, request_content_type=None,
-                status_code=302, response_headers={"Location": "https://staging-api.example.com/confirm"},
+                status_code=302, response_headers={"Location": "https://staging-api.internal.com/confirm"},
                 response_body=None, response_content_type=None, duration_ms=50)
     insert_flow(path, timestamp=now - 1, method="GET", scheme="https",
-                host="staging-api.example.com", port=443, path="/confirm", query=None,
+                host="staging-api.internal.com", port=443, path="/confirm", query=None,
                 request_headers={}, request_body=None, request_content_type=None,
                 status_code=302, response_headers={"Location": "https://accounts.google.com/oauth"},
                 response_body=None, response_content_type=None, duration_ms=40)
@@ -3446,7 +3446,7 @@ Create `eval/scenarios/find_401_cause.yaml`:
 name: find_401_cause
 description: "Find the cause of 401 unauthorized responses"
 fixture: auth_failure.db
-task: "api.example.com에서 401 응답이 오는 요청의 원인을 찾아라"
+task: "api.internal.com에서 401 응답이 오는 요청의 원인을 찾아라"
 steps:
   - tool: troxy_list_flows
     args: {status: 401}

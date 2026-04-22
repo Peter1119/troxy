@@ -22,7 +22,7 @@ def _seed(db_path):
                 response_body='{"users": []}', response_content_type="application/json",
                 duration_ms=42.0)
     insert_flow(db_path, timestamp=time.time(), method="POST", scheme="https",
-                host="api.example.com", port=443, path="/api/users", query=None,
+                host="api.internal.com", port=443, path="/api/users", query=None,
                 request_headers={"Content-Type": "application/json"},
                 request_body='{"email": "test@test.com"}',
                 request_content_type="application/json", status_code=401,
@@ -40,7 +40,7 @@ def test_handle_list_flows(tmp_db):
 
 def test_handle_list_flows_with_filter(tmp_db):
     _seed(tmp_db)
-    result = handle_list_flows(tmp_db, {"domain": "example"})
+    result = handle_list_flows(tmp_db, {"domain": "internal"})
     data = json.loads(result)
     assert len(data) == 1
 
@@ -49,7 +49,7 @@ def test_handle_get_flow(tmp_db):
     _seed(tmp_db)
     result = handle_get_flow(tmp_db, {"id": 2})
     data = json.loads(result)
-    assert data["host"] == "api.example.com"
+    assert data["host"] == "api.internal.com"
     assert "unauthorized" in data["response_body"]
 
 

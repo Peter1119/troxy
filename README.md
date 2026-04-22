@@ -87,9 +87,10 @@ troxy tail -s 4xx                  # 4xx 실시간 스트리밍
 
 ### Session (프로젝트별 DB)
 ```bash
-troxy session save example-debug /tmp/example.db
+troxy session save api-debug /tmp/api-debug.db
 troxy session list                 # 저장된 세션
-eval "$(troxy session use example-debug)"   # 현재 셸에서 TROXY_DB 세팅
+# session use는 export 명령을 출력 — eval로 현재 셸에 적용
+eval "$(troxy session use api-debug)"
 ```
 
 ### Alias (자주 쓰는 필터 단축어)

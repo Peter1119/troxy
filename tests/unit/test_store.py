@@ -39,7 +39,7 @@ def test_insert_flow_stores_all_fields(tmp_db):
     init_db(tmp_db)
     flow_data = _make_flow(
         method="POST",
-        host="api.example.com",
+        host="api.internal.com",
         path="/api/users",
         status_code=401,
         response_body='{"error": "unauthorized"}',
@@ -48,7 +48,7 @@ def test_insert_flow_stores_all_fields(tmp_db):
     conn = get_connection(tmp_db)
     row = conn.execute("SELECT * FROM flows WHERE id = ?", (flow_id,)).fetchone()
     assert row["method"] == "POST"
-    assert row["host"] == "api.example.com"
+    assert row["host"] == "api.internal.com"
     assert row["status_code"] == 401
     assert row["response_body"] == '{"error": "unauthorized"}'
     conn.close()

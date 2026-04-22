@@ -161,15 +161,15 @@ troxy status             # DB 상태 (flow 수, 크기, 경로)
 기본 목록 출력:
 ```
 ID   TIME     METHOD  HOST                    PATH                         STATUS  SIZE   DURATION
-42   09:55:13 GET     api.example.com        /api/users/17ov.../ratings   401     152b   30ms
-43   09:55:13 POST    api.example.com        /api/users                   200     840b   371ms
+42   09:55:13 GET     api.internal.com        /api/users/17ov.../ratings   401     152b   30ms
+43   09:55:13 POST    api.internal.com        /api/users                   200     840b   371ms
 ```
 
 상세 출력 (`troxy flow 42`):
 ```
 ── Request ──────────────────────────────
-GET https://api.example.com/api/users/17ovVJlDr1vzy/ratings/2026/4
-Host: api.example.com
+GET https://api.internal.com/api/users/17ovVJlDr1vzy/ratings/2026/4
+Host: api.internal.com
 Authorization: Bearer eyJ...
 Accept: application/json
 
@@ -279,7 +279,7 @@ eval/
 ```yaml
 name: find_401_cause
 fixture: auth_failure.db
-task: "api.example.com에서 401 응답이 오는 요청의 원인을 찾아라"
+task: "api.internal.com에서 401 응답이 오는 요청의 원인을 찾아라"
 expected_tool_calls:
   - troxy_list_flows(status=401)
   - troxy_get_flow(id=*, part="response")

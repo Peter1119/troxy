@@ -223,7 +223,7 @@ class TroxyApp(App):
     def compose(self) -> ComposeResult:
         yield Horizontal(
             Label("Host:", classes="filter-label"),
-            Input(placeholder="e.g. example", value=self._filter_domain,
+            Input(placeholder="e.g. api.example.com", value=self._filter_domain,
                   id="filter-domain", classes="filter-input"),
             Label("Path:", classes="filter-label"),
             Input(placeholder="e.g. /api", id="filter-path", classes="filter-input"),
@@ -287,7 +287,10 @@ class TroxyApp(App):
     def _add_flow_row(self, table: DataTable, f: dict) -> None:
         method = f["method"]
         status = f["status_code"]
-        host_style = "bold" if "example" in f.get("host", "") else ""
+        host = f.get("host", "")
+        host_style = (
+            "bold" if self._filter_domain and self._filter_domain.lower() in host.lower() else ""
+        )
         table.add_row(
             Text(_fmt_time(f["timestamp"]), style="dim"),
             Text(_short_method(method), style=METHOD_COLORS.get(method, "white")),
