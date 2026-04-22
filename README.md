@@ -23,18 +23,34 @@ mitmproxy로 캡처한 모든 HTTP flow를 SQLite에 기록하고, **CLI와 (선
 
 ## 60초 셋업
 
-```bash
-# 1. 설치
-brew install Peter1119/troxy/troxy
+> Homebrew가 없으면 [brew.sh](https://brew.sh) 참고. troxy는 내부적으로 `python@3.14` + `uv`에 의존하는데 brew가 자동으로 받아와요.
 
-# 2. 가이드 온보딩 — CA 생성 → 신뢰 → 기기 프록시 설정까지 한 줄
-troxy start              # 첫 실행으로 CA 생성 (Ctrl+C)
-troxy onboard            # macOS keychain 신뢰 + 기기 설정 안내
-troxy doctor             # 환경 검증
+```bash
+# 1. 설치 (tap 자동 추가 + Formula 설치)
+brew install peter1119/troxy/troxy
+
+# 2. 가이드 온보딩 — CA 생성·신뢰·기기 프록시 안내까지 한 번에
+troxy onboard            # 없으면 CA 자동 생성 → macOS 키체인 신뢰 → iOS/Android 안내
+troxy doctor             # 환경 검증 (cert / DB / MCP 등)
 
 # 3. (선택) Claude MCP 등록 — AI 없이도 troxy 다 쓸 수 있음
 troxy init
 ```
+
+### 이미 설치했는데 명령어가 없다고 나오면
+```bash
+brew update && brew upgrade peter1119/troxy/troxy    # formula 최신화
+```
+
+### 기기에 CA 설치하기 (HTTPS 가로채려면 필수)
+
+`troxy onboard`가 대부분 안내하지만 요약:
+
+| 플랫폼 | 방법 |
+|---|---|
+| macOS | `troxy onboard` 가 `sudo` 1회로 시스템 키체인에 자동 등록 |
+| iOS Simulator / 실기 | 기기를 `127.0.0.1:8080` 프록시로 연결한 뒤 Safari에서 `http://mitm.it` → iOS 프로필 설치 → **설정 → 일반 → 정보 → 인증서 신뢰 설정**에서 mitmproxy 토글 ON |
+| Android Emulator | 프록시 켠 뒤 `http://mitm.it` 에서 CA 설치. 단 Android 7+ 는 앱이 `network_security_config.xml` 로 user CA 신뢰해야 가로채짐 |
 
 ### 첫 흐름 확인
 
@@ -181,8 +197,9 @@ SQLite (~/.troxy/flows.db)
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| 인증서 에러 | CA cert 미신뢰 | `troxy start` → `http://mitm.it`에서 cert 설치 |
-| `troxy-mcp not on PATH` | brew 아닌 설치 | `uv pip install -e .` 또는 재설치 |
+| `troxy doctor`/`onboard`/`explain`이 "No such command" | 구버전(v0.2.0) 설치 | `brew update && brew upgrade peter1119/troxy/troxy` |
+| 인증서 에러 (SSL handshake 실패) | CA cert 미신뢰 | `troxy onboard` — macOS 키체인 자동 등록. iOS/Android는 기기에서 `http://mitm.it` 접속해 설치 |
+| `troxy-mcp not on PATH` | 수동 설치 후 PATH 누락 | `brew reinstall peter1119/troxy/troxy` — brew 경로로 재설치 |
 | Claude에서 MCP 안 보임 | 등록 scope 문제 | `troxy init --force --scope user` |
 
 ## 개발
