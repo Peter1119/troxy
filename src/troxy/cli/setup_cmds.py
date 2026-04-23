@@ -130,41 +130,41 @@ def doctor_cmd():
 @click.command("onboard")
 @click.option("--skip-trust", is_flag=True, help="Skip keychain trust step")
 @click.option("--platform", default=None,
-              type=click.Choice(["ios-sim", "android-emu", "manual"]),
+              type=click.Choice(["ios-sim", "android-emu", "web", "manual"]),
               help="Target device platform for proxy config hints")
 def onboard_cmd(skip_trust, platform):
     """Guided first-run setup: generate CA, trust it, print device proxy instructions.
 
     Folds what was previously three manual steps into one command.
     """
-    click.echo("troxy onboard — guided setup\n")
+    click.echo("🚀 troxy onboard — 가이드 설정을 시작합니다\n")
 
     # Step 1: Ensure CA cert exists — generate automatically if missing
     ca = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
     if not ca.exists():
-        click.echo("Step 1/3: mitmproxy CA cert not found — generating now...")
+        click.echo("📜 Step 1/3: mitmproxy CA 인증서가 없어 자동 생성합니다…")
         success, stderr = generate_ca_cert(ca)
         if not success:
-            click.echo(f"  ✗ Failed to auto-generate CA at {ca}")
+            click.echo(f"  ✗ CA 자동 생성 실패: {ca}")
             lower = stderr.lower()
             if "address already in use" in lower or "bind" in lower:
-                click.echo("      Port 19481 is in use. Check with `lsof -i :19481`, kill the blocker, retry.")
+                click.echo("      포트 19481이 사용 중입니다. `lsof -i :19481`로 확인 후 점유 프로세스 종료하고 재시도하세요.")
             elif stderr:
                 click.echo(f"      mitmdump stderr: {stderr[:200]}")
-            click.echo("      Fallback: run `troxy start` once, Ctrl+C, then rerun `troxy onboard`.")
+            click.echo("      대체 방법: `troxy start`를 한 번 실행 후 Ctrl+C 종료, 그다음 `troxy onboard` 재실행.")
             sys.exit(1)
-        click.echo(f"  ✓ Step 1/3: CA cert generated at {ca}")
+        click.echo(f"  ✓ Step 1/3: CA 인증서 생성 완료 → {ca}")
     else:
-        click.echo(f"  ✓ Step 1/3: CA cert present at {ca}")
+        click.echo(f"  ✓ Step 1/3: CA 인증서 이미 존재 → {ca}")
 
     # Step 2: Trust in macOS keychain
     if skip_trust:
-        click.echo("  ⚠ Step 2/3: skipped (--skip-trust)")
+        click.echo("🔑 Step 2/3: 키체인 신뢰 단계 건너뜀 (--skip-trust)")
     elif sys.platform != "darwin":
-        click.echo(f"  ⚠ Step 2/3: auto-trust skipped (not macOS — {sys.platform})")
-        click.echo(f"      Trust manually: open http://mitm.it from a proxied device")
+        click.echo(f"🔑 Step 2/3: 자동 신뢰 건너뜀 (macOS 아님 — {sys.platform})")
+        click.echo("      수동 신뢰: 프록시 연결된 기기에서 http://mitm.it 접속")
     else:
-        click.echo("  → Step 2/3: adding CA to macOS keychain (sudo required)")
+        click.echo("🔑 Step 2/3: macOS 키체인에 CA 추가 중 (sudo 권한 필요)")
         result = subprocess.run(
             ["sudo", "security", "add-trusted-cert", "-d",
              "-p", "ssl", "-p", "basic",
@@ -172,19 +172,20 @@ def onboard_cmd(skip_trust, platform):
             capture_output=True, text=True,
         )
         if result.returncode != 0:
-            click.echo(f"  ✗ Trust failed: {result.stderr.strip()}")
-            click.echo("      Fix manually: open http://mitm.it from a proxied device")
+            click.echo(f"  ✗ 신뢰 추가 실패: {result.stderr.strip()}")
+            click.echo("      수동 신뢰: 프록시 연결된 기기에서 http://mitm.it 접속")
         else:
-            click.echo("  ✓ Step 2/3: CA trusted in system keychain")
+            click.echo("  ✓ Step 2/3: 시스템 키체인에 CA 신뢰 완료")
 
     # Step 3: Device proxy configuration
-    click.echo("\nStep 3/3: configure your device/simulator proxy to 127.0.0.1:8080")
+    click.echo("\n📱 Step 3/3: 기기/시뮬레이터의 프록시를 127.0.0.1:8080 으로 설정하세요\n")
     print_device_hints(platform)
 
     click.echo(
-        "\nDone. Run `troxy start` to capture flows, "
-        "then `troxy flows` / `troxy explain <id>`.\n"
-        "Bonus: run `troxy init` to let Claude Code query your flows via MCP.\n"
+        "\n🎉 모든 설정이 완료되었습니다!\n"
+        "  ▶︎ `troxy start` 로 플로우 캡처를 시작하세요.\n"
+        "  ▶︎ `troxy flows` / `troxy explain <id>` 로 결과를 확인할 수 있습니다.\n"
+        "  ✨ 보너스: `troxy init` 을 실행하면 Claude Code 가 MCP 로 플로우를 질의할 수 있습니다.\n"
     )
 
 
