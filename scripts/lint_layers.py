@@ -27,6 +27,10 @@ def main():
     for f in (src / "mcp").rglob("*.py"):
         check_file(f, ["troxy.cli", "mitmproxy"])
 
+    if (src / "tui").exists():
+        for f in (src / "tui").rglob("*.py"):
+            check_file(f, ["mitmproxy", "troxy.cli", "troxy.mcp"])
+
     if VIOLATIONS:
         print("Layer dependency violations:")
         for v in VIOLATIONS:

@@ -1,9 +1,35 @@
 """Mock rules CRUD operations."""
 
+import re
 import time
 
 from troxy.core.db import get_connection
 from troxy.core.query import get_flow
+
+_DYNAMIC_SEGMENT = re.compile(
+    r"^("
+    r"\d+$"                                     # pure numeric: 123, 2026
+    r"|"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"  # full UUID
+    r"|"
+    r"[A-Za-z0-9]{10,}$"                        # long alphanumeric (base64-ish IDs)
+    r")"
+)
+
+
+def suggest_glob(path: str) -> str:
+    """Replace dynamic path segments (IDs, UUIDs) with '*'."""
+    stripped = path.strip("/")
+    if not stripped:
+        return "/"
+    segments = stripped.split("/")
+    result = []
+    for seg in segments:
+        if _DYNAMIC_SEGMENT.match(seg):
+            result.append("*")
+        else:
+            result.append(seg)
+    return "/" + "/".join(result)
 
 
 def add_mock_rule(

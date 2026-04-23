@@ -116,6 +116,13 @@ class TroxyAddon:
                 headers = json.loads(rule["response_headers"])
             body = (rule["response_body"] or "").encode("utf-8")
             flow.response = http.Response.make(rule["status_code"], body, headers)
+            conn = get_connection(self.db_path)
+            conn.execute(
+                "UPDATE mock_rules SET hit_count = hit_count + 1, last_hit_at = ? WHERE id = ?",
+                (time_mod.time(), rule["id"]),
+            )
+            conn.commit()
+            conn.close()
             return
 
     def _check_intercept(self, flow):

@@ -7,3 +7,7 @@ build/
 .pytest_cache/
 .coverage
 *.db
+
+# ad-hoc response dumps / scratch files
+response
+response.*
