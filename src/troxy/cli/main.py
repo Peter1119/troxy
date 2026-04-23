@@ -157,30 +157,47 @@ def clear_cmd(db, no_color, before, yes):
 @cli.command("start")
 @click.option("-p", "--port", default=8080, type=int, help="Proxy port")
 @click.option("--mode", default=None, help="Proxy mode (e.g. regular, transparent)")
-@click.option("-d", "--domain", default=None, help="Filter display by domain")
-@click.option("--mitmproxy", "use_mitmproxy", is_flag=True,
-              help="Use mitmproxy console TUI instead of troxy TUI")
-def start_cmd(port, mode, domain, use_mitmproxy):
-    """Start proxy with interactive flow inspector."""
-    import shutil
+@_common_options
+def start_cmd(port, mode, db, no_color):
+    """Start mitmproxy (headless) + troxy TUI."""
+    _apply_no_color(no_color)
+    from troxy.tui.app import TroxyStartApp
+    from troxy.tui.proxy import ProxyManager, ProxyBootError
 
-    addon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "addon.py")
+    db_path = _resolve_db(db)
+    init_db(db_path)
 
-    if use_mitmproxy:
-        venv_bin = os.path.join(os.path.dirname(sys.executable), "mitmproxy")
-        bin_path = venv_bin if os.path.exists(venv_bin) else shutil.which("mitmproxy")
-        if not bin_path:
-            click.echo("mitmproxy not found.", err=True)
-            sys.exit(1)
-        cmd = [bin_path, "-s", addon_path, "-p", str(port)]
-        if mode:
-            cmd.extend(["--mode", mode])
-        os.execvp(bin_path, cmd)
-        return
+    proxy = ProxyManager(port=port, mode=mode, db_path=db_path)
+    try:
+        proxy.start()
+    except ProxyBootError as e:
+        click.echo(f"troxy start failed:\n{e}", err=True)
+        sys.exit(2)
+    except RuntimeError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
 
-    db_path = os.environ.get("TROXY_DB", os.path.expanduser("~/.troxy/flows.db"))
-    from troxy.cli.tui_app import run_tui
-    run_tui(port=port, mode=mode, domain=domain, db_path=db_path)
+    # Convert SIGTERM into SystemExit so the finally block below (and
+    # atexit hook) run. Default SIGTERM would skip cleanup and orphan mitmdump.
+    import atexit
+    import signal
+    atexit.register(proxy.stop)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+    from troxy.cli.hints import hints_enabled
+
+    try:
+        app = TroxyStartApp(
+            db_path=db_path,
+            port=port,
+            mcp_registered=hints_enabled(),
+            proxy_running_fn=lambda: proxy.running,
+            proxy_pause_fn=proxy.pause,
+            proxy_resume_fn=proxy.resume,
+        )
+        app.run()
+    finally:
+        proxy.stop()
 
 
 def _register_subgroups() -> None:

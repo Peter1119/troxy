@@ -92,6 +92,15 @@ def _run_migrations(conn) -> None:
     if "name" not in existing:
         conn.execute("ALTER TABLE mock_rules ADD COLUMN name TEXT")
         conn.commit()
+    if "hit_count" not in existing:
+        conn.execute(
+            "ALTER TABLE mock_rules ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0"
+        )
+    if "last_hit_at" not in existing:
+        conn.execute(
+            "ALTER TABLE mock_rules ADD COLUMN last_hit_at REAL"
+        )
+    conn.commit()
 
 
 def default_db_path() -> str:

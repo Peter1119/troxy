@@ -4,7 +4,7 @@ import time
 
 from troxy.core.db import init_db
 from troxy.core.store import insert_flow
-from troxy.core.query import list_flows, get_flow, search_flows
+from troxy.core.query import list_flows, get_flow, search_flows, delete_all_flows, list_flows_filtered
 
 
 def _seed_flows(db_path):
@@ -130,3 +130,30 @@ def test_search_flows_no_results(tmp_db):
     _seed_flows(tmp_db)
     results = search_flows(tmp_db, "nonexistent_string_xyz")
     assert len(results) == 0
+
+
+def test_delete_all_flows(tmp_db):
+    _seed_flows(tmp_db)
+    count = delete_all_flows(tmp_db)
+    assert count == 4
+    assert list_flows(tmp_db) == []
+
+
+def test_list_flows_filtered_by_status_range(tmp_db):
+    _seed_flows(tmp_db)
+    results = list_flows_filtered(tmp_db, "status:4xx")
+    assert len(results) == 1
+    assert all(400 <= r["status_code"] <= 499 for r in results)
+
+
+def test_list_flows_filtered_by_host(tmp_db):
+    _seed_flows(tmp_db)
+    results = list_flows_filtered(tmp_db, "host:cdn")
+    assert len(results) == 1
+    assert results[0]["host"] == "cdn.example.com"
+
+
+def test_list_flows_filtered_empty(tmp_db):
+    _seed_flows(tmp_db)
+    results = list_flows_filtered(tmp_db, "")
+    assert len(results) == 4
