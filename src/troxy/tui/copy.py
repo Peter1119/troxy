@@ -16,7 +16,7 @@ DETAIL_HINT = (
 # -- Mock List hints --
 MOCK_LIST_HINT = (
     "\u2191\u2193 browse \u00b7 Space toggle"
-    " \u00b7 \u23ce edit \u00b7 d delete \u00b7 Esc back"
+    " \u00b7 \u23ce edit \u00b7 a add \u00b7 d delete \u00b7 Esc back"
 )
 
 # -- Copy modal options --

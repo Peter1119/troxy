@@ -67,7 +67,8 @@ def body_renderable(body, content_type) -> RenderableType | None:
         return None
     if isinstance(body, str) and body.startswith("b64:"):
         return Text(f"(binary, {len(body)} bytes base64)", style="dim italic")
-    if content_type and "json" in content_type:
+    looks_json = isinstance(body, str) and body.lstrip()[:1] in ("{", "[")
+    if (content_type and "json" in content_type) or looks_json:
         try:
             pretty = json.dumps(json.loads(body), indent=2, ensure_ascii=False)
             return Syntax(

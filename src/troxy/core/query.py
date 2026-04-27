@@ -111,6 +111,8 @@ def list_flows_filtered(db_path: str, filter_text: str, *, limit: int = 500) -> 
             r for r in results
             if q in (r.get("request_body") or "").lower()
             or q in (r.get("response_body") or "").lower()
+            or q in (r.get("request_headers") or "").lower()
+            or q in (r.get("response_headers") or "").lower()
             or q in (r.get("path") or "").lower()
         ]
 

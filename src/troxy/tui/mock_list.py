@@ -32,6 +32,7 @@ class MockListScreen(Screen):
     BINDINGS = [
         ("escape", "go_back", "back"),
         ("space", "toggle_mock", "toggle"),
+        ("a", "add_mock", "add"),
         ("d", "delete_mock", "delete"),
     ]
 
@@ -180,6 +181,24 @@ class MockListScreen(Screen):
             copy.confirm_mock_delete(name),
             f"{_DELETE_ACTION_PREFIX}{rule_id}",
         )
+
+    def action_add_mock(self) -> None:
+        """Open MockDialog with a blank flow stub so the user can hand-craft a rule
+        without needing to capture a request first."""
+        from troxy.tui.mock_dialog import MockDialog
+
+        blank_flow = {
+            "id": 0,
+            "method": "GET",
+            "host": "",
+            "path": "/",
+            "scheme": "https",
+            "status_code": 200,
+            "response_headers": "{}",
+            "response_body": "",
+            "response_content_type": "application/json",
+        }
+        self.app.push_screen(MockDialog(self._db_path, blank_flow))
 
     def action_edit_mock(self) -> None:
         rule_id = self._selected_rule_id()

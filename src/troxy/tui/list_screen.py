@@ -28,6 +28,7 @@ class ListScreen(Screen):
         ("escape", "clear_filter", "clear filter"),
         ("m", "mock_flow", "mock"),
         ("shift+m", "mock_list", "mocks"),
+        ("M", "mock_list", "mocks"),
         ("i", "intercept_placeholder", "intercept"),
         ("p", "toggle_pause", "pause"),
         ("s", "toggle_sort", "sort"),

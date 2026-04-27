@@ -41,14 +41,14 @@ class _Harness(App):
 
 
 @pytest.mark.asyncio
-async def test_four_inputs_mounted():
-    """Mutation probe: remove a field from FIELD_IDS → count drops to 3."""
+async def test_five_inputs_mounted():
+    """Mutation probe: remove a field from FIELD_IDS → count drops below 5."""
     app = _Harness()
     async with app.run_test() as pilot:
         await pilot.pause()
         widget = app.query_one("#inline-filter", InlineFilter)
         inputs = list(widget.query(Input))
-        assert len(inputs) == 4
+        assert len(inputs) == 5
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_hide_preserves_input_values():
 
 
 @pytest.mark.asyncio
-async def test_field_order_host_status_method_path():
+async def test_field_order_host_status_method_path_search():
     """Stable order matters for Tab navigation — pin it here."""
     app = _Harness()
     async with app.run_test() as pilot:
@@ -117,6 +117,7 @@ async def test_field_order_host_status_method_path():
             "inline-filter-status",
             "inline-filter-method",
             "inline-filter-path",
+            "inline-filter-search",
         ]
 
 
@@ -133,6 +134,7 @@ async def test_placeholders_match_field_names():
             "inline-filter-status": "status",
             "inline-filter-method": "method",
             "inline-filter-path": "path",
+            "inline-filter-search": "search",
         }
 
 

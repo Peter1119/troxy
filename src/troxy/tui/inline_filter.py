@@ -11,7 +11,8 @@ toggled into view by the ``.visible`` class — same pattern used by
 
 Contract (pinned by ``tests/tui/test_inline_filter.py``):
   - Hidden by default (no ``.visible`` class on mount).
-  - Exactly 4 Inputs in order: host, status, method, path.
+  - 5 Inputs in order: host, status, method, path, search. The trailing
+    ``search`` field is a free-text matcher that hits body / headers / path.
   - Placeholders equal the field name verbatim — no truncation.
   - ``show()`` reveals the bar AND focuses the first (host) field.
   - ``hide()`` conceals the bar WITHOUT touching values — Round 7 Esc
@@ -31,7 +32,7 @@ from textual.widget import Widget
 from textual.widgets import Input
 
 
-FIELD_IDS: tuple[str, ...] = ("host", "status", "method", "path")
+FIELD_IDS: tuple[str, ...] = ("host", "status", "method", "path", "search")
 
 
 class InlineFilter(Widget):
@@ -112,13 +113,18 @@ class InlineFilter(Widget):
         Example: with host="a.com" and status="4xx", returns
         ``"host:a.com status:4xx"``. Empty fields are dropped so
         ``core.filter_parser.parse_filter`` receives a clean string.
+        ``search`` value joins as a free-text token (matches body / headers / path).
         """
         parts = []
         for fid in FIELD_IDS:
             value = self.query_one(
                 f"#inline-filter-{fid}", Input
             ).value.strip()
-            if value:
+            if not value:
+                continue
+            if fid == "search":
+                parts.append(value)
+            else:
                 parts.append(f"{fid}:{value}")
         return " ".join(parts)
 
