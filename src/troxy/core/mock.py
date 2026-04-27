@@ -107,8 +107,19 @@ def toggle_mock_rule(db_path: str, rule_id: int, *, enabled: bool) -> None:
     conn.close()
 
 
-def mock_from_flow(db_path: str, flow_id: int, *, status_code: int | None = None) -> int:
-    """Create a mock rule from an existing flow's response."""
+def mock_from_flow(
+    db_path: str,
+    flow_id: int,
+    *,
+    status_code: int | None = None,
+    response_body: str | None = None,
+    response_headers: str | None = None,
+    name: str | None = None,
+) -> int:
+    """Create a mock rule from an existing flow's response.
+
+    Optional overrides: status_code, response_body, response_headers, name.
+    """
     flow = get_flow(db_path, flow_id)
     if not flow:
         raise ValueError(f"Flow {flow_id} not found")
@@ -118,8 +129,9 @@ def mock_from_flow(db_path: str, flow_id: int, *, status_code: int | None = None
         path_pattern=flow["path"],
         method=flow["method"],
         status_code=status_code or flow["status_code"],
-        response_headers=flow["response_headers"],
-        response_body=flow["response_body"],
+        response_headers=response_headers if response_headers is not None else flow["response_headers"],
+        response_body=response_body if response_body is not None else flow["response_body"],
+        name=name,
     )
 
 

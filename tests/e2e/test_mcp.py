@@ -1,9 +1,10 @@
 """E2E tests for MCP server tools."""
 
+import base64
 import json
 import time
 
-from troxy.core.db import init_db
+from troxy.core.db import init_db, get_connection
 from troxy.core.store import insert_flow
 
 from troxy.mcp.server import (
@@ -100,3 +101,63 @@ def test_handle_mock_list(tmp_db):
     result = handle_mock_list(tmp_db, {})
     data = json.loads(result)
     assert len(data) == 1
+
+
+def _seed_form_flow(db_path, body_bytes, content_type="application/x-www-form-urlencoded"):
+    init_db(db_path)
+    insert_flow(db_path, timestamp=time.time(), method="POST", scheme="https",
+                host="api.example.com", port=443, path="/api/orders", query=None,
+                request_headers={"Content-Type": content_type},
+                request_body=body_bytes, request_content_type=content_type,
+                status_code=200, response_headers={}, response_body="{}",
+                response_content_type="application/json", duration_ms=10.0)
+
+
+def test_handle_get_flow_form_part_parses_form(tmp_db):
+    _seed_form_flow(tmp_db, b"a=1&b=Ticket%3A%3ATall")
+    result = handle_get_flow(tmp_db, {"id": 1, "part": "form"})
+    data = json.loads(result)
+    assert data["fields"] == {"a": "1", "b": "Ticket::Tall"}
+    assert data["truncated"] is False
+
+
+def test_handle_get_flow_form_part_decodes_legacy_b64(tmp_db):
+    init_db(tmp_db)
+    body = b"receipt_data=" + b"A" * 500 + b"&ticket_type=Ticket%3A%3ATall"
+    legacy_stored = "b64:" + base64.b64encode(body).decode("ascii")
+    insert_flow(tmp_db, timestamp=time.time(), method="POST", scheme="https",
+                host="api.example.com", port=443, path="/api/orders", query=None,
+                request_headers={"Content-Type": "application/x-www-form-urlencoded"},
+                request_body=None, request_content_type="application/x-www-form-urlencoded",
+                status_code=200, response_headers={}, response_body=None,
+                response_content_type=None, duration_ms=10.0)
+    conn = get_connection(tmp_db)
+    conn.execute("UPDATE flows SET request_body = ? WHERE id = 1", (legacy_stored,))
+    conn.commit()
+    conn.close()
+    result = handle_get_flow(tmp_db, {"id": 1, "part": "form"})
+    data = json.loads(result)
+    assert data["fields"]["ticket_type"] == "Ticket::Tall"
+    assert isinstance(data["fields"]["receipt_data"], dict)
+    assert data["fields"]["receipt_data"]["_kind"] == "binary-base64"
+
+
+def test_handle_get_flow_form_part_rejects_non_form(tmp_db):
+    init_db(tmp_db)
+    insert_flow(tmp_db, timestamp=time.time(), method="POST", scheme="https",
+                host="api.example.com", port=443, path="/api/users", query=None,
+                request_headers={"Content-Type": "application/json"},
+                request_body='{"a": 1}', request_content_type="application/json",
+                status_code=200, response_headers={}, response_body="{}",
+                response_content_type="application/json", duration_ms=10.0)
+    result = handle_get_flow(tmp_db, {"id": 1, "part": "form"})
+    data = json.loads(result)
+    assert data["error"] == "not form-urlencoded"
+    assert data["content_type"] == "application/json"
+
+
+def test_handle_get_flow_form_part_empty_body(tmp_db):
+    _seed_form_flow(tmp_db, None)
+    result = handle_get_flow(tmp_db, {"id": 1, "part": "form"})
+    data = json.loads(result)
+    assert data == {"fields": {}, "truncated": False}

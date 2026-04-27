@@ -1,5 +1,6 @@
 """troxy MCP server — exposes flow data as MCP tools."""
 
+import base64
 import json
 import os
 import sys
@@ -7,10 +8,14 @@ import sys
 from troxy.core.db import default_db_path, init_db, get_connection
 from troxy.core.query import list_flows, get_flow, search_flows
 from troxy.core.export import export_curl, export_httpie
-from troxy.core.mock import add_mock_rule, list_mock_rules, remove_mock_rule, toggle_mock_rule, mock_from_flow
+from troxy.core.formats import parse_form_body
 from troxy.core.intercept import (
     add_intercept_rule, list_intercept_rules, remove_intercept_rule,
     list_pending_flows, update_pending_flow, get_pending_flow,
+)
+from troxy.mcp.mock_handlers import (
+    handle_mock_add, handle_mock_list, handle_mock_remove, handle_mock_toggle,
+    handle_mock_from_flow, handle_mock_reset, handle_mock_update,
 )
 
 
@@ -54,11 +59,29 @@ def handle_get_flow(db_path: str, args: dict) -> str:
             "request_body": flow.get("request_body"),
             "response_body": flow.get("response_body"),
         }, indent=2)
+    if part == "form":
+        return json.dumps(_form_view(flow), indent=2, ensure_ascii=False)
     if part == "request":
         return json.dumps({k: v for k, v in flow.items() if k.startswith("request") or k in ("method", "scheme", "host", "port", "path", "query")}, indent=2, default=str)
     if part == "response":
         return json.dumps({k: v for k, v in flow.items() if k.startswith("response") or k == "status_code"}, indent=2, default=str)
     return json.dumps(flow, indent=2, default=str)
+
+
+def _form_view(flow: dict) -> dict:
+    """Return parsed form-urlencoded request body, handling legacy b64-encoded rows."""
+    content_type = flow.get("request_content_type") or ""
+    if "x-www-form-urlencoded" not in content_type:
+        return {"error": "not form-urlencoded", "content_type": content_type}
+    body = flow.get("request_body")
+    if not body:
+        return {"fields": {}, "truncated": False}
+    if isinstance(body, str) and body.startswith("b64:"):
+        try:
+            body = base64.b64decode(body[4:]).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as e:
+            return {"error": "decode failed", "reason": str(e)}
+    return parse_form_body(body)
 
 
 def handle_search(db_path: str, args: dict) -> str:
@@ -87,39 +110,6 @@ def handle_status(db_path: str, args: dict) -> str:
     conn.close()
     db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
     return json.dumps({"flow_count": count, "db_size": db_size, "db_path": db_path})
-
-
-def handle_mock_add(db_path: str, args: dict) -> str:
-    rule_id = add_mock_rule(
-        db_path,
-        domain=args.get("domain"),
-        path_pattern=args.get("path_pattern"),
-        method=args.get("method"),
-        status_code=args.get("status_code", 200),
-        response_headers=args.get("headers"),
-        response_body=args.get("body"),
-    )
-    return json.dumps({"rule_id": rule_id})
-
-
-def handle_mock_list(db_path: str, args: dict) -> str:
-    rules = list_mock_rules(db_path)
-    return json.dumps(rules, indent=2, default=str)
-
-
-def handle_mock_remove(db_path: str, args: dict) -> str:
-    remove_mock_rule(db_path, args["id"])
-    return json.dumps({"removed": args["id"]})
-
-
-def handle_mock_toggle(db_path: str, args: dict) -> str:
-    toggle_mock_rule(db_path, args["id"], enabled=args.get("enabled", True))
-    return json.dumps({"toggled": args["id"]})
-
-
-def handle_mock_from_flow(db_path: str, args: dict) -> str:
-    rule_id = mock_from_flow(db_path, args["flow_id"], status_code=args.get("status_code"))
-    return json.dumps({"rule_id": rule_id})
 
 
 def handle_intercept_add(db_path: str, args: dict) -> str:
@@ -181,6 +171,8 @@ _HANDLERS = {
     "troxy_mock_remove": handle_mock_remove,
     "troxy_mock_toggle": handle_mock_toggle,
     "troxy_mock_from_flow": handle_mock_from_flow,
+    "troxy_mock_reset": handle_mock_reset,
+    "troxy_mock_update": handle_mock_update,
     "troxy_intercept_add": handle_intercept_add,
     "troxy_intercept_list": handle_intercept_list,
     "troxy_intercept_remove": handle_intercept_remove,

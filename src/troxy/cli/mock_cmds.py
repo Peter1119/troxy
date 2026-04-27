@@ -151,6 +151,24 @@ def mock_from_flow_cmd(db, flow_id, status_code):
         sys.exit(1)
 
 
+@mock_group.command("reset")
+@click.option("--db", default=None, help="Database path")
+@click.argument("rule_ref")
+def mock_reset_cmd(db, rule_ref):
+    """Reset a scripted scenario's step counter to the beginning."""
+    import sys
+    from troxy.core.scenarios import reset_scenario, resolve_scenario_ref
+    db_path = _resolve_db(db)
+    init_db(db_path)
+    try:
+        sid = resolve_scenario_ref(db_path, rule_ref)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+    reset_scenario(db_path, sid)
+    click.echo(f"Scenario rule {sid} reset to step 1.")
+
+
 @mock_group.command("from-status")
 @click.option("--db", default=None, help="Database path")
 @click.argument("status", type=int)

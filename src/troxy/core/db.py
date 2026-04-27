@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 
-DB_SCHEMA_VERSION = 1
+DB_SCHEMA_VERSION = 2
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS flows (
@@ -63,6 +63,21 @@ CREATE TABLE IF NOT EXISTS pending_flows (
     request_body TEXT,
     status TEXT NOT NULL DEFAULT 'pending'
 );
+
+CREATE TABLE IF NOT EXISTS mock_scenarios (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT,
+    domain          TEXT,
+    path_pattern    TEXT,
+    method          TEXT,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    current_step    INTEGER NOT NULL DEFAULT 0,
+    steps           TEXT    NOT NULL,
+    loop            INTEGER NOT NULL DEFAULT 0,
+    created_at      REAL    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_scenarios_enabled ON mock_scenarios(enabled);
 """
 
 

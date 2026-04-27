@@ -94,3 +94,32 @@ def test_insert_multiple_flows_increments_id(tmp_db):
     id2 = insert_flow(tmp_db, **_make_flow())
     assert id1 == 1
     assert id2 == 2
+
+
+def test_form_urlencoded_body_stored_as_text(tmp_db):
+    init_db(tmp_db)
+    body = b"a=1&b=Ticket%3A%3ATall"
+    insert_flow(tmp_db, **_make_flow(
+        method="POST",
+        request_body=body,
+        request_content_type="application/x-www-form-urlencoded",
+    ))
+    conn = get_connection(tmp_db)
+    row = conn.execute("SELECT request_body FROM flows WHERE id = 1").fetchone()
+    assert row["request_body"] == "a=1&b=Ticket%3A%3ATall"
+    assert not row["request_body"].startswith("b64:")
+    conn.close()
+
+
+def test_form_urlencoded_with_charset_param_stored_as_text(tmp_db):
+    init_db(tmp_db)
+    body = b"a=1&b=2"
+    insert_flow(tmp_db, **_make_flow(
+        method="POST",
+        request_body=body,
+        request_content_type="application/x-www-form-urlencoded; charset=utf-8",
+    ))
+    conn = get_connection(tmp_db)
+    row = conn.execute("SELECT request_body FROM flows WHERE id = 1").fetchone()
+    assert row["request_body"] == "a=1&b=2"
+    conn.close()

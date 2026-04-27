@@ -44,6 +44,7 @@ def _encode_body(body, content_type: str | None) -> str | None:
             or "xml" in content_type
             or "javascript" in content_type
             or "html" in content_type
+            or "x-www-form-urlencoded" in content_type
         ):
             try:
                 text = body.decode("utf-8", errors="replace")

@@ -203,6 +203,7 @@ def start_cmd(port, mode, db, no_color):
 def _register_subgroups() -> None:
     from troxy.cli.mock_cmds import mock_group
     from troxy.cli.intercept_cmds import intercept_group
+    from troxy.cli.scenario_cmds import scenario_group
     from troxy.cli.flow_cmds import (
         pending_cmd, modify_cmd, release_cmd, drop_cmd, replay_cmd, tail_cmd,
     )
@@ -215,6 +216,7 @@ def _register_subgroups() -> None:
     from troxy.cli.pick_cmds import pick_cmd
     cli.add_command(mock_group)
     cli.add_command(intercept_group)
+    cli.add_command(scenario_group)
     cli.add_command(pending_cmd)
     cli.add_command(modify_cmd)
     cli.add_command(release_cmd)

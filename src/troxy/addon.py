@@ -31,10 +31,12 @@ class TroxyAddon:
         self._poll_thread.start()
 
     def request(self, flow):
-        """Check mock rules, then intercept rules."""
+        """Check scenario rules, then mock rules, then intercept rules."""
         try:
-            self._check_mock(flow)
-            if not flow.response:  # not mocked
+            self._check_scenario(flow)
+            if not flow.response:
+                self._check_mock(flow)
+            if not flow.response:
                 self._check_intercept(flow)
         except Exception as e:
             print(f"[troxy] Error in request hook: {e}", file=sys.stderr)
@@ -99,6 +101,32 @@ class TroxyAddon:
             )
         except Exception as e:
             print(f"[troxy] Error recording flow: {e}", file=sys.stderr)
+
+    def _check_scenario(self, flow):
+        from troxy.core.scenarios import list_scenarios, get_and_advance_step
+        from mitmproxy import http
+        scenarios = list_scenarios(self.db_path, enabled_only=True)
+        for s in scenarios:
+            if s["domain"] and s["domain"] not in flow.request.host:
+                continue
+            if s["method"] and s["method"].upper() != flow.request.method:
+                continue
+            if s["path_pattern"] and not fnmatch.fnmatch(flow.request.path, s["path_pattern"]):
+                continue
+            step = get_and_advance_step(self.db_path, s["id"])
+            if step is None:
+                continue
+            headers = {}
+            raw_headers = step.get("response_headers")
+            if raw_headers:
+                if isinstance(raw_headers, str):
+                    import json as _json
+                    headers = _json.loads(raw_headers)
+                else:
+                    headers = raw_headers
+            body = (step.get("response_body") or "").encode("utf-8")
+            flow.response = http.Response.make(step["status_code"], body, headers)
+            return
 
     def _check_mock(self, flow):
         from troxy.core.mock import list_mock_rules
