@@ -4,6 +4,7 @@ input → rendered output transformations."""
 
 from __future__ import annotations
 
+import base64
 import json
 from urllib.parse import parse_qsl
 
@@ -62,19 +63,59 @@ def parse_headers(headers) -> dict:
     return dict(headers) if headers else {}
 
 
+_BINARY_CONTENT_HINTS = (
+    "octet-stream",
+    "image/",
+    "audio/",
+    "video/",
+    "application/pdf",
+    "application/zip",
+    "application/x-protobuf",
+    "application/grpc",
+)
+
+
+def unfold_b64_text(body, content_type=None):
+    """If body was stored with a ``b64:`` prefix (binary fallback in store.py)
+    but is actually utf-8 text, return the decoded string. Otherwise return body
+    unchanged (or None for genuinely binary payloads).
+
+    Skips unfolding when content_type advertises a binary payload — that's a
+    capture-time signal we should respect even if the bytes happen to be
+    utf-8-decodable.
+    """
+    if not isinstance(body, str) or not body.startswith("b64:"):
+        return body
+    ct = (content_type or "").lower()
+    if any(hint in ct for hint in _BINARY_CONTENT_HINTS):
+        return body
+    try:
+        return base64.b64decode(body[4:], validate=False).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return body
+
+
 def parse_body_as_json(body, content_type):
     """Return parsed Python obj if body is JSON-like, else None.
 
     Used by DetailScreen to decide whether to render a collapsible Tree
     view (interactive) or fall back to a Syntax block (static).
     """
-    if not isinstance(body, str) or not body or body.startswith("b64:"):
+    if not isinstance(body, str):
         return None
-    looks_json = body.lstrip()[:1] in ("{", "[")
-    if not (looks_json or (content_type and "json" in content_type)):
+    body = unfold_b64_text(body, content_type)
+    if not isinstance(body, str) or body.startswith("b64:"):
+        return None
+    stripped = body.lstrip().lstrip("﻿")  # tolerate BOM-prefixed payloads
+    if not stripped:
+        return None
+    ct = (content_type or "").lower()
+    looks_json = stripped[:1] in ("{", "[")
+    ct_is_json = "json" in ct or "+json" in ct
+    if not (looks_json or ct_is_json):
         return None
     try:
-        return json.loads(body)
+        return json.loads(stripped)
     except (json.JSONDecodeError, TypeError):
         return None
 
@@ -139,6 +180,7 @@ def body_renderable(body, content_type) -> RenderableType | None:
     """Return a rich renderable for the body, or None if empty."""
     if not body:
         return None
+    body = unfold_b64_text(body, content_type)
     if isinstance(body, str) and body.startswith("b64:"):
         return Text(f"(binary, {len(body)} bytes base64)", style="dim italic")
     looks_json = isinstance(body, str) and body.lstrip()[:1] in ("{", "[")

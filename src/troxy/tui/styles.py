@@ -26,8 +26,11 @@ DETAIL_SCREEN_CSS = """
 }
 .json-tree {
     height: auto;
+    min-height: 8;
+    max-height: 100%;
     background: $surface;
     margin: 0 1;
+    padding: 0 1;
 }
 #hint-bar {
     height: 1;

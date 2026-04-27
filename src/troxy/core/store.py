@@ -38,14 +38,27 @@ def _encode_body(body, content_type: str | None) -> str | None:
         if max_bytes is not None and len(body) > max_bytes:
             body = body[:max_bytes]
             truncated = True
-        if content_type and (
-            content_type.startswith("text/")
-            or "json" in content_type
-            or "xml" in content_type
-            or "javascript" in content_type
-            or "html" in content_type
-            or "x-www-form-urlencoded" in content_type
-        ):
+        ct = (content_type or "").lower()
+        likely_text = (
+            ct.startswith("text/")
+            or "json" in ct
+            or "+json" in ct
+            or "xml" in ct
+            or "javascript" in ct
+            or "html" in ct
+            or "x-www-form-urlencoded" in ct
+        )
+        # Even when content-type is missing/unknown, capture utf-8-decodable bodies
+        # as text — request bodies often come through without a server-set type and
+        # we want them readable in the TUI / MCP without manual base64 unfolding.
+        if not likely_text and not ct:
+            try:
+                text = body.decode("utf-8")
+            except UnicodeDecodeError:
+                text = None
+            if text is not None and "\x00" not in text:
+                return text + f"\n[truncated at {max_bytes}B]" if truncated else text
+        if likely_text:
             try:
                 text = body.decode("utf-8", errors="replace")
                 return text + f"\n[truncated at {max_bytes}B]" if truncated else text
