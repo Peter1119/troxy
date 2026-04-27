@@ -162,8 +162,12 @@ async def test_mock_list_escape_pops(tmp_db):
 
 
 @pytest.mark.asyncio
-async def test_list_screen_shift_m_opens_mock_list(tmp_db):
-    """Shift+M on ListScreen pushes MockListScreen."""
+async def test_list_screen_capital_m_opens_mock_list(tmp_db):
+    """Capital ``M`` on ListScreen pushes MockListScreen.
+
+    ``shift+m`` doesn't get delivered as a Screen binding by every terminal /
+    Textual version, so we bind the literal ``M`` and assert that here.
+    """
     db = str(tmp_db)
     _seed(db)
 
@@ -177,7 +181,7 @@ async def test_list_screen_shift_m_opens_mock_list(tmp_db):
 
     async with TestApp().run_test() as pilot:
         await pilot.pause()
-        await pilot.press("shift+m")
+        await pilot.press("M")
         await pilot.pause()
         assert isinstance(pilot.app.screen, MockListScreen)
         await pilot.press("escape")

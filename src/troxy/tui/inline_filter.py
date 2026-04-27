@@ -123,7 +123,10 @@ class InlineFilter(Widget):
             if not value:
                 continue
             if fid == "search":
-                parts.append(value)
+                # ":"·whitespace splits parse_filter into separate tokens, which
+                # could re-route the value into host:/status:/method:/path:. Drop
+                # those characters so search stays a single freetext term.
+                parts.append(value.replace(":", " ").replace("\n", " "))
             else:
                 parts.append(f"{fid}:{value}")
         return " ".join(parts)

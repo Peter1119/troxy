@@ -24,7 +24,12 @@ def parse_filter(text: str) -> dict:
                     base = int(match.group(1)) * 100
                     result["status_range"] = (base, base + 99)
                 else:
-                    result["status"] = int(value)
+                    try:
+                        result["status"] = int(value)
+                    except ValueError:
+                        # Non-numeric status (e.g. user typed text) → treat as freetext
+                        # so the filter UI doesn't crash, just no status match.
+                        freetext_parts.append(token)
             elif key == "method":
                 result["method"] = value.upper()
             elif key == "path":

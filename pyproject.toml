@@ -1,6 +1,6 @@
 [project]
 name = "troxy"
-version = "0.5.3"
+version = "0.5.4"
 description = "Terminal proxy inspector — mitmproxy flows for CLI and Claude"
 requires-python = ">=3.14"
 dependencies = [

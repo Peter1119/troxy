@@ -27,7 +27,6 @@ class ListScreen(Screen):
         ("f", "show_filter", "filter"),
         ("escape", "clear_filter", "clear filter"),
         ("m", "mock_flow", "mock"),
-        ("shift+m", "mock_list", "mocks"),
         ("M", "mock_list", "mocks"),
         ("i", "intercept_placeholder", "intercept"),
         ("p", "toggle_pause", "pause"),
@@ -92,6 +91,22 @@ class ListScreen(Screen):
 
     def _poll_new_flows(self) -> None:
         if self._active_filter:
+            new_flows = list_flows_filtered(
+                self._db_path,
+                self._active_filter,
+                since_id=self._last_id,
+                limit=500,
+            )
+            if not new_flows:
+                return
+            if self._newest_first:
+                return self._refresh_table_with_filter()
+            table = self.query_one("#flow-table", DataTable)
+            for flow in new_flows:
+                add_flow_row(table, flow)
+                self._last_id = max(self._last_id, flow["id"])
+                self._flow_count += 1
+            self._update_header()
             return
         conn = get_connection(self._db_path)
         rows = conn.execute(

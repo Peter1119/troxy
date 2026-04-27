@@ -67,12 +67,22 @@ def delete_all_flows(db_path: str) -> int:
     return count
 
 
-def list_flows_filtered(db_path: str, filter_text: str, *, limit: int = 500) -> list[dict]:
-    """List flows using filter expression syntax (host:X status:4xx method:POST)."""
+def list_flows_filtered(
+    db_path: str,
+    filter_text: str,
+    *,
+    limit: int = 500,
+    since_id: int | None = None,
+) -> list[dict]:
+    """List flows using filter expression syntax (host:X status:4xx method:POST).
+
+    ``since_id``: when set, only rows with id > since_id are returned — used by the
+    TUI's incremental polling so filtered views stay live instead of frozen.
+    """
     from troxy.core.filter_parser import parse_filter
 
     parsed = parse_filter(filter_text)
-    if not parsed:
+    if not parsed and since_id is None:
         return list_flows(db_path, limit=limit)
 
     conn = get_connection(db_path)
@@ -95,9 +105,13 @@ def list_flows_filtered(db_path: str, filter_text: str, *, limit: int = 500) -> 
     if "path" in parsed:
         conditions.append("path LIKE ?")
         params.append(parsed["path"].replace("*", "%"))
+    if since_id is not None:
+        conditions.append("id > ?")
+        params.append(since_id)
 
     where = " AND ".join(conditions) if conditions else "1=1"
-    sql = f"SELECT * FROM flows WHERE {where} ORDER BY timestamp DESC LIMIT ?"
+    order_by = "id ASC" if since_id is not None else "timestamp DESC"
+    sql = f"SELECT * FROM flows WHERE {where} ORDER BY {order_by} LIMIT ?"
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
