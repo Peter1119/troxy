@@ -2,7 +2,7 @@
 
 # -- List View hints --
 LIST_HINT = (
-    "\u2191\u2193 browse \u00b7 \u23ce detail \u00b7 f filter"
+    "\u2191\u2193 browse \u00b7 \u23ce detail \u00b7 v side \u00b7 f filter"
     " \u00b7 m mock \u00b7 M mocks \u00b7 s sort \u00b7 p pause"
     " \u00b7 x clear \u00b7 q quit"
 )

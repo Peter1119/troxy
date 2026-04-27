@@ -4,6 +4,7 @@ from typing import Callable
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.coordinate import Coordinate
 from textual.screen import Screen
 from textual.widgets import DataTable, Static
@@ -12,6 +13,7 @@ from troxy.core.db import default_db_path, init_db, get_connection
 from troxy.core.mock import list_mock_rules
 from troxy.core.query import delete_all_flows, get_flow, list_flows, list_flows_filtered
 from troxy.tui import copy
+from troxy.tui.inline_detail import InlineDetailPanel
 from troxy.tui.inline_filter import InlineFilter
 from troxy.tui.list_helpers import add_flow_row, time_header_label, update_cursor_marker
 from troxy.tui.network import get_local_ip
@@ -28,6 +30,7 @@ class ListScreen(Screen):
         ("escape", "clear_filter", "clear filter"),
         ("m", "mock_flow", "mock"),
         ("M", "mock_list", "mocks"),
+        ("v", "toggle_side_view", "side"),
         ("i", "intercept_placeholder", "intercept"),
         ("p", "toggle_pause", "pause"),
         ("s", "toggle_sort", "sort"),
@@ -70,7 +73,9 @@ class ListScreen(Screen):
         table.add_column("HOST", key="host")
         table.add_column("PATH", key="path")
         table.add_column(Text("STATUS", justify="right"), key="status")
-        yield table
+        with Horizontal(id="list-body"):
+            yield table
+            yield InlineDetailPanel(id="side-detail")
         yield Static(id="filter-status")
         yield Static(copy.LIST_HINT, id="hint-bar")
         yield Static(id="proxy-bar")
@@ -131,6 +136,17 @@ class ListScreen(Screen):
     ) -> None:
         table = self.query_one("#flow-table", DataTable)
         update_cursor_marker(table)
+        side = self.query_one("#side-detail", InlineDetailPanel)
+        if side.is_visible():
+            side.update_for_flow(self._db_path, self._get_selected_flow_id())
+
+    def action_toggle_side_view(self) -> None:
+        side = self.query_one("#side-detail", InlineDetailPanel)
+        if side.is_visible():
+            side.hide()
+            return
+        side.show()
+        side.update_for_flow(self._db_path, self._get_selected_flow_id())
 
     def _update_header(self) -> None:
         header = self.query_one("#header", Static)

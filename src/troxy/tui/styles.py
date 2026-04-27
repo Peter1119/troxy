@@ -24,6 +24,11 @@ DETAIL_SCREEN_CSS = """
     overflow-y: scroll;
     padding: 0 1;
 }
+.json-tree {
+    height: auto;
+    background: $surface;
+    margin: 0 1;
+}
 #hint-bar {
     height: 1;
     background: $panel;
@@ -39,8 +44,12 @@ LIST_SCREEN_CSS = """
     color: $text-muted;
     padding: 0 1;
 }
-#flow-table {
+#list-body {
     height: 1fr;
+}
+#flow-table {
+    height: 100%;
+    width: 1fr;
     background: $surface;
 }
 #flow-table > .datatable--header {

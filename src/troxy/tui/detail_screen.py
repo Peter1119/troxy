@@ -5,7 +5,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Static
+from textual.widgets import Static, Tree
 
 from troxy.core.export import export_curl, export_httpie
 from troxy.core.query import get_flow
@@ -17,7 +17,9 @@ from troxy.tui.detail_helpers import (
     build_response_text,
     format_size,
     get_url,
+    parse_body_as_json,
     parse_headers,
+    populate_json_tree,
     preview_query,
     render_headers,
 )
@@ -53,13 +55,21 @@ class DetailScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Static(id="url-bar")
         yield Static(id="tab-bar")
+        request_tree = Tree("body", id="request-tree", classes="json-tree hidden")
+        request_tree.show_root = False
+        request_tree.guide_depth = 3
         yield VerticalScroll(
             Static(id="request-pane", classes="pane"),
+            request_tree,
             id="request-container",
             classes="hidden",
         )
+        response_tree = Tree("body", id="response-tree", classes="json-tree hidden")
+        response_tree.show_root = False
+        response_tree.guide_depth = 3
         yield VerticalScroll(
             Static(id="response-pane", classes="pane"),
+            response_tree,
             id="response-container",
         )
         yield Static(copy.DETAIL_HINT, id="hint-bar")
@@ -100,23 +110,50 @@ class DetailScreen(Screen):
 
     def _render_request(self) -> None:
         f = self._flow
-        header_text = render_headers(parse_headers(f["request_headers"]))
-        body = body_renderable(f.get("request_body"), f.get("request_content_type"))
-        if body is None:
-            group = Group(header_text, Text("\n(body 없음)", style="dim italic"))
-        else:
-            group = Group(header_text, Text(""), body)
-        self.query_one("#request-pane", Static).update(group)
+        self._render_pane(
+            pane_id="request-pane",
+            tree_id="request-tree",
+            headers_raw=f["request_headers"],
+            body=f.get("request_body"),
+            content_type=f.get("request_content_type"),
+        )
 
     def _render_response(self) -> None:
         f = self._flow
-        header_text = render_headers(parse_headers(f["response_headers"]))
-        body = body_renderable(f.get("response_body"), f.get("response_content_type"))
-        if body is None:
-            group = Group(header_text)
+        self._render_pane(
+            pane_id="response-pane",
+            tree_id="response-tree",
+            headers_raw=f["response_headers"],
+            body=f.get("response_body"),
+            content_type=f.get("response_content_type"),
+        )
+
+    def _render_pane(
+        self,
+        *,
+        pane_id: str,
+        tree_id: str,
+        headers_raw,
+        body,
+        content_type,
+    ) -> None:
+        header_text = render_headers(parse_headers(headers_raw))
+        json_data = parse_body_as_json(body, content_type)
+        tree = self.query_one(f"#{tree_id}", Tree)
+        if json_data is not None:
+            tree.remove_class("hidden")
+            populate_json_tree(tree, json_data)
+            self.query_one(f"#{pane_id}", Static).update(
+                Group(header_text, Text("\n(body — Tree below: ⏎ 펼치기/접기)", style="dim italic"))
+            )
+            return
+        tree.add_class("hidden")
+        body_render = body_renderable(body, content_type)
+        if body_render is None:
+            group = Group(header_text, Text("\n(body 없음)", style="dim italic"))
         else:
-            group = Group(header_text, Text(""), body)
-        self.query_one("#response-pane", Static).update(group)
+            group = Group(header_text, Text(""), body_render)
+        self.query_one(f"#{pane_id}", Static).update(group)
 
     def _render_tab_bar(self) -> None:
         """Render `[ Request ]   ( Response )` with brackets marking the active tab.

@@ -62,6 +62,79 @@ def parse_headers(headers) -> dict:
     return dict(headers) if headers else {}
 
 
+def parse_body_as_json(body, content_type):
+    """Return parsed Python obj if body is JSON-like, else None.
+
+    Used by DetailScreen to decide whether to render a collapsible Tree
+    view (interactive) or fall back to a Syntax block (static).
+    """
+    if not isinstance(body, str) or not body or body.startswith("b64:"):
+        return None
+    looks_json = body.lstrip()[:1] in ("{", "[")
+    if not (looks_json or (content_type and "json" in content_type)):
+        return None
+    try:
+        return json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def populate_json_tree(tree, data) -> None:
+    """Wipe the tree and reseed with `data`. Root expands so the first level
+    of keys is visible; deeper nodes stay collapsed (user opens on demand)."""
+    tree.clear()
+    _populate_node(tree.root, data)
+    tree.root.expand()
+
+
+def _populate_node(node, value) -> None:
+    if isinstance(value, dict):
+        if not value:
+            node.add_leaf(Text("{}", style="dim"))
+            return
+        for k, v in value.items():
+            _add_kv_node(node, str(k), v)
+    elif isinstance(value, list):
+        if not value:
+            node.add_leaf(Text("[]", style="dim"))
+            return
+        for i, v in enumerate(value):
+            _add_kv_node(node, f"[{i}]", v)
+    else:
+        node.add_leaf(_format_primitive(value))
+
+
+def _add_kv_node(parent, key: str, value) -> None:
+    if isinstance(value, (dict, list)):
+        size = len(value)
+        kind = "{}" if isinstance(value, dict) else "[]"
+        label = Text()
+        label.append(key, style="bold cyan")
+        label.append(": ", style="dim")
+        label.append(f"{kind[0]} {size} item{'s' if size != 1 else ''} {kind[1]}", style="dim")
+        child = parent.add(label)
+        _populate_node(child, value)
+    else:
+        label = Text()
+        label.append(key, style="bold cyan")
+        label.append(": ", style="dim")
+        label.append_text(_format_primitive(value))
+        parent.add_leaf(label)
+
+
+def _format_primitive(value) -> Text:
+    if value is None:
+        return Text("null", style="italic dim")
+    if isinstance(value, bool):
+        return Text(str(value).lower(), style="bold magenta")
+    if isinstance(value, (int, float)):
+        return Text(str(value), style="bold yellow")
+    if isinstance(value, str):
+        v = value if len(value) <= HEADER_VALUE_FOLD else value[:HEADER_VALUE_FOLD - 3] + "..."
+        return Text(f'"{v}"', style="green")
+    return Text(repr(value))
+
+
 def body_renderable(body, content_type) -> RenderableType | None:
     """Return a rich renderable for the body, or None if empty."""
     if not body:
