@@ -5,6 +5,7 @@ input → rendered output transformations."""
 from __future__ import annotations
 
 import json
+from urllib.parse import parse_qsl
 
 from rich.console import RenderableType
 from rich.syntax import Syntax
@@ -80,7 +81,38 @@ def body_renderable(body, content_type) -> RenderableType | None:
             )
         except (json.JSONDecodeError, TypeError):
             pass
+    if isinstance(body, str) and _looks_form_urlencoded(body, content_type):
+        rendered = _render_form_body(body)
+        if rendered is not None:
+            return rendered
     return Text(body)
+
+
+def _looks_form_urlencoded(body: str, content_type) -> bool:
+    if content_type and "x-www-form-urlencoded" in content_type:
+        return True
+    if "=" in body and "\n" not in body and "<" not in body[:1]:
+        # Heuristic: body has key=value pairs and is single-line / no HTML.
+        return all("=" in pair for pair in body.split("&") if pair)
+    return False
+
+
+def _render_form_body(body: str) -> Text | None:
+    """Pretty-print form-urlencoded body — one ``key: value`` per line, URL-decoded."""
+    try:
+        pairs = parse_qsl(body, keep_blank_values=True, strict_parsing=False)
+    except ValueError:
+        return None
+    if not pairs:
+        return None
+    t = Text()
+    for i, (k, v) in enumerate(pairs):
+        if i > 0:
+            t.append("\n")
+        key_padded = str(k)[:HEADER_KEY_WIDTH].ljust(HEADER_KEY_WIDTH)
+        t.append(f"  {key_padded}  ", style="dim")
+        t.append_text(fold_value(v))
+    return t
 
 
 def format_size(body: str | None) -> str:
