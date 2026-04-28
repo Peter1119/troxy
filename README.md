@@ -112,7 +112,7 @@ troxy search "access_token"        # 전체 body 검색
 troxy tail -s 4xx                  # 4xx 실시간 스트리밍
 ```
 
-### Session (프로젝트별 DB)
+### 세션 (프로젝트별 DB)
 ```bash
 troxy session save api-debug /tmp/api-debug.db
 troxy session list                 # 저장된 세션
@@ -120,7 +120,7 @@ troxy session list                 # 저장된 세션
 eval "$(troxy session use api-debug)"
 ```
 
-### Alias (자주 쓰는 필터 단축어)
+### 별칭 (Alias — 자주 쓰는 필터 단축어)
 ```bash
 troxy alias add auth   "flows -s 401"
 troxy alias add slow   "flows --since 5m -m POST"
@@ -240,6 +240,6 @@ uv run python scripts/lint_layers.py
 uv run python scripts/check_file_size.py
 ```
 
-## License
+## 라이선스
 
 MIT

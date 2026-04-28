@@ -84,7 +84,7 @@ _ANDROID_HINT = (
     "    2. 설정 → 보안 → 저장소에서 설치\n"
     "  ⚠️  Android 7+ : 앱이 user CA를 신뢰하려면 network_security_config.xml 필요\n"
     '                  (<trust-anchors><certificates src="user"/></trust-anchors>)\n'
-    "  ⚠️  Android 14+: production-signed 앱은 user CA 사용 제한 — debug 빌드만 가능\n"
+    "  ⚠️  Android 14+: 프로덕션 서명 앱은 user CA 사용 제한 — debug 빌드만 가능\n"
 )
 
 _GENERIC_HINT = (
@@ -102,9 +102,9 @@ _WEB_HINT = (
     "        (onboard Step 2에서 시스템 키체인 신뢰 완료 시 HTTPS도 바로 복호화)\n"
     "\n"
     "    ② Firefox — 자체 프록시 + CA 필요\n"
-    "        Settings → Network Settings → Manual proxy → 127.0.0.1 / 8080\n"
-    "        about:preferences#privacy → Certificates → Import →\n"
-    "          ~/.mitmproxy/mitmproxy-ca-cert.pem 선택 (Trust for websites 체크)\n"
+    "        설정 → 네트워크 설정 → 수동 프록시 구성 → 127.0.0.1 / 8080\n"
+    "        about:preferences#privacy → 인증서 → 가져오기 →\n"
+    "          ~/.mitmproxy/mitmproxy-ca-cert.pem 선택 (웹사이트 신뢰용 체크)\n"
     "\n"
     "    ③ curl / httpie / 기타 CLI\n"
     "        export HTTPS_PROXY=http://127.0.0.1:8080 HTTP_PROXY=http://127.0.0.1:8080\n"

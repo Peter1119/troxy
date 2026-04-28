@@ -25,11 +25,11 @@ _EXAMPLE_PROMPTS = {
 
 @click.command("mcp-tools")
 def mcp_tools_cmd():
-    """List MCP tools with example prompts (useful before `troxy init`)."""
+    """MCP 도구 목록 출력 (`troxy init` 전에 어떤 도구가 노출되는지 미리보기용)."""
     from troxy.core.tool_catalog import TOOL_SCHEMAS
     click.echo(
-        "troxy MCP exposes 17 tools to Claude Code. Register with `troxy init`, "
-        "then ask Claude things like:\n"
+        "troxy MCP는 Claude Code에 17개 도구를 노출합니다. `troxy init`으로 "
+        "등록한 뒤 Claude에 이렇게 물어보세요:\n"
     )
     for name, info in TOOL_SCHEMAS.items():
         example = _EXAMPLE_PROMPTS.get(name)
@@ -42,24 +42,24 @@ def mcp_tools_cmd():
 
 @click.command("version")
 def version_cmd():
-    """Show troxy version and environment info."""
+    """troxy 버전과 환경 정보를 표시합니다."""
     try:
         from importlib.metadata import version as _pkg_version
         pkg_version = _pkg_version("troxy")
     except Exception:
-        pkg_version = "unknown (dev)"
+        pkg_version = "알 수 없음 (dev)"
 
     click.echo(f"troxy {pkg_version}")
     click.echo(f"  Python: {sys.version.split()[0]} ({sys.executable})")
     click.echo(f"  DB:     {default_db_path()}")
 
     mitm = shutil.which("mitmproxy")
-    click.echo(f"  mitmproxy: {mitm or 'not found'}")
+    click.echo(f"  mitmproxy: {mitm or '설치되지 않음'}")
 
 
 @click.command("doctor")
 def doctor_cmd():
-    """Diagnose troxy setup. Checks mitmproxy, DB, cert, MCP."""
+    """troxy 설정을 진단합니다 (mitmproxy / DB / 인증서 / MCP)."""
     ok = True
 
     def check(label, condition, hint=None):
@@ -72,7 +72,7 @@ def doctor_cmd():
                 click.echo(f"      → {hint}")
             ok = False
 
-    click.echo("Checking troxy environment...\n")
+    click.echo("troxy 환경 점검 중...\n")
 
     # 1. mitmproxy installed
     mitm = shutil.which("mitmproxy")
@@ -80,9 +80,9 @@ def doctor_cmd():
     if os.path.exists(venv_mitm):
         mitm = venv_mitm
     check(
-        f"mitmproxy installed ({mitm or 'missing'})",
+        f"mitmproxy 설치 ({mitm or '없음'})",
         mitm is not None,
-        "Install: `brew install mitmproxy` or `uv add mitmproxy`",
+        "설치: `brew install mitmproxy` 또는 `uv add mitmproxy`",
     )
 
     # 2. DB accessible
@@ -92,24 +92,24 @@ def doctor_cmd():
         conn = get_connection(db_path)
         count = conn.execute("SELECT COUNT(*) FROM flows").fetchone()[0]
         conn.close()
-        check(f"DB ready at {db_path} ({count} flows)", True)
+        check(f"DB 준비됨 — {db_path} ({count}개 flow)", True)
     except Exception as e:
-        check(f"DB at {db_path}", False, f"Error: {e}")
+        check(f"DB 위치: {db_path}", False, f"오류: {e}")
 
     # 3. mitmproxy CA cert installed
     cert_path = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
     check(
-        f"mitmproxy CA cert at {cert_path}",
+        f"mitmproxy CA 인증서 위치: {cert_path}",
         cert_path.exists(),
-        "Run `troxy onboard` to auto-generate the CA and (on macOS) trust it in the system keychain.",
+        "`troxy onboard` 실행 시 CA가 자동 생성되고 macOS는 시스템 키체인에 자동 신뢰됩니다.",
     )
 
     # 4. troxy-mcp command available
     troxy_mcp = shutil.which("troxy-mcp")
     check(
-        f"troxy-mcp command ({troxy_mcp or 'not on PATH'})",
+        f"troxy-mcp 명령 ({troxy_mcp or 'PATH에 없음'})",
         troxy_mcp is not None,
-        "Reinstall via brew, or run `uv pip install -e .` in the project dir",
+        "brew로 재설치하거나 프로젝트 디렉토리에서 `uv pip install -e .` 실행",
     )
 
     # 5. Claude CLI (optional but needed for `init`)
@@ -117,25 +117,25 @@ def doctor_cmd():
     if claude:
         click.echo(f"  ✓ Claude Code CLI ({claude})")
     else:
-        click.echo("  ⚠ Claude Code CLI not found (optional — needed for `troxy init`)")
+        click.echo("  ⚠ Claude Code CLI 없음 (선택 — `troxy init`에만 필요)")
 
     click.echo()
     if ok:
-        click.echo("All checks passed. Ready to capture flows.")
+        click.echo("모든 점검 통과. flow 캡처 준비 완료.")
     else:
-        click.echo("Some checks failed. Fix the ✗ items above.")
+        click.echo("일부 점검 실패. 위 ✗ 항목을 해결하세요.")
         sys.exit(1)
 
 
 @click.command("onboard")
-@click.option("--skip-trust", is_flag=True, help="Skip keychain trust step")
+@click.option("--skip-trust", is_flag=True, help="키체인 신뢰 단계 건너뛰기")
 @click.option("--platform", default=None,
               type=click.Choice(["ios-sim", "android-emu", "web", "manual"]),
-              help="Target device platform for proxy config hints")
+              help="프록시 설정 안내를 받을 대상 플랫폼")
 def onboard_cmd(skip_trust, platform):
-    """Guided first-run setup: generate CA, trust it, print device proxy instructions.
+    """최초 1회 가이드 설정 — CA 생성, 신뢰 등록, 기기 프록시 안내까지 한 번에.
 
-    Folds what was previously three manual steps into one command.
+    이전에는 3단계로 나눠 수동으로 해야 했던 셋업을 단일 명령으로 묶었습니다.
     """
     click.echo("🚀 troxy onboard — 가이드 설정을 시작합니다\n")
 
@@ -192,14 +192,14 @@ def onboard_cmd(skip_trust, platform):
 @click.command("init")
 @click.option("--scope", default="user",
               type=click.Choice(["user", "project", "local"]),
-              help="Claude MCP scope (default: user)")
-@click.option("--force", is_flag=True, help="Overwrite existing registration")
+              help="Claude MCP scope (기본: user)")
+@click.option("--force", is_flag=True, help="기존 등록 덮어쓰기")
 def init_cmd(scope, force):
-    """Register troxy as a Claude Code MCP server (one-shot setup)."""
+    """troxy를 Claude Code MCP 서버로 등록합니다 (한 번에 설정)."""
     claude = shutil.which("claude")
     if not claude:
         click.echo(
-            "Claude Code CLI not found. Install from https://claude.com/claude-code",
+            "Claude Code CLI를 찾을 수 없습니다. https://claude.com/claude-code 에서 설치하세요.",
             err=True,
         )
         sys.exit(1)
@@ -211,20 +211,20 @@ def init_cmd(scope, force):
         subprocess.run([claude, "mcp", "remove", "troxy", "-s", scope],
                        capture_output=True)
 
-    click.echo(f"Registering troxy MCP server (scope={scope})...")
+    click.echo(f"troxy MCP 서버 등록 중 (scope={scope})...")
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         click.echo(result.stderr or result.stdout, err=True)
         click.echo(
-            "\nIf troxy is already registered, rerun with --force.",
+            "\n이미 등록된 troxy가 있다면 --force로 다시 실행하세요.",
             err=True,
         )
         sys.exit(1)
 
-    click.echo(result.stdout.strip() or "Registered.")
+    click.echo(result.stdout.strip() or "등록 완료.")
     click.echo(
-        "\nNext steps:\n"
-        "  1. Run `troxy start` to launch mitmproxy with the troxy addon\n"
-        "  2. Configure your app/device proxy to 127.0.0.1:8080\n"
-        "  3. Ask Claude: \"troxy_status\" to confirm MCP works\n"
+        "\n다음 단계:\n"
+        "  1. `troxy start`로 mitmproxy + troxy addon 실행\n"
+        "  2. 앱/기기 프록시를 127.0.0.1:8080으로 설정\n"
+        "  3. Claude에서 \"troxy_status\"를 물어 MCP 동작 확인\n"
     )
