@@ -8,6 +8,7 @@ DetailScreen via Enter is still available for full-screen interaction.
 from __future__ import annotations
 
 from rich.console import Group
+from rich.panel import Panel
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
@@ -82,20 +83,32 @@ def _compose_summary(flow: dict) -> Group:
     head.append("\n")
     head.append(f"{flow['scheme']}://{flow['host']}{flow['path']}", style="")
 
-    req_label = Text("\n\n[Request headers]\n", style="bold dim")
     req_headers = render_headers(parse_headers(flow["request_headers"]))
     req_body = _summarize_body(flow.get("request_body"), flow.get("request_content_type"))
+    req_panel = Panel(
+        Group(req_headers, req_body),
+        title="REQUEST",
+        title_align="left",
+        border_style=method_color(method),
+        padding=(0, 1),
+    )
 
-    res_label = Text("\n\n[Response headers]\n", style="bold dim")
     res_headers = render_headers(parse_headers(flow["response_headers"]))
     res_body = _summarize_body(flow.get("response_body"), flow.get("response_content_type"))
+    res_panel = Panel(
+        Group(res_headers, res_body),
+        title="RESPONSE",
+        title_align="left",
+        border_style=status_color(status),
+        padding=(0, 1),
+    )
 
-    return Group(head, req_label, req_headers, req_body, res_label, res_headers, res_body)
+    return Group(head, Text(""), req_panel, res_panel)
 
 
 def _summarize_body(body, content_type):
     if not body:
-        return Text("\n(no body)", style="dim italic")
+        return Text("(no body)", style="dim italic")
     json_data = parse_body_as_json(body, content_type)
     if json_data is not None:
         # Show top-level keys only — full tree lives in DetailScreen.
@@ -103,8 +116,8 @@ def _summarize_body(body, content_type):
             keys = list(json_data.keys())
             preview = ", ".join(keys[:6])
             extra = f" +{len(keys) - 6} more" if len(keys) > 6 else ""
-            return Text(f"\n(JSON: {preview}{extra})", style="dim italic")
+            return Text(f"(JSON: {preview}{extra})", style="dim italic")
         if isinstance(json_data, list):
-            return Text(f"\n(JSON array, {len(json_data)} items)", style="dim italic")
+            return Text(f"(JSON array, {len(json_data)} items)", style="dim italic")
     rendered = body_renderable(body, content_type)
-    return rendered if rendered is not None else Text("\n(empty)", style="dim italic")
+    return rendered if rendered is not None else Text("(empty)", style="dim italic")

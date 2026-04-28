@@ -1,6 +1,7 @@
 """DetailScreen — flow detail view (Request/Response tab view)."""
 
 from rich.console import Group
+from rich.panel import Panel
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
@@ -137,23 +138,47 @@ class DetailScreen(Screen):
         body,
         content_type,
     ) -> None:
+        is_request = pane_id == "request-pane"
+        label = "REQUEST" if is_request else "RESPONSE"
+        if is_request:
+            accent = method_color(self._flow["method"])
+        else:
+            accent = status_color(int(self._flow["status_code"]))
+
         header_text = render_headers(parse_headers(headers_raw))
+        headers_panel = Panel(
+            header_text,
+            title=f"{label} · Headers",
+            title_align="left",
+            border_style=accent,
+            padding=(0, 1),
+        )
+
         json_data = parse_body_as_json(body, content_type)
         tree = self.query_one(f"#{tree_id}", Tree)
         if json_data is not None:
             tree.remove_class("hidden")
             populate_json_tree(tree, json_data)
-            self.query_one(f"#{pane_id}", Static).update(
-                Group(header_text, Text("\n(body — Tree below: ⏎ 펼치기/접기)", style="dim italic"))
+            body_panel = Panel(
+                Text("(body — Tree 아래에서 ⏎ 펼치기/접기)", style="dim italic"),
+                title=f"{label} · Body (JSON)",
+                title_align="left",
+                border_style=accent,
+                padding=(0, 1),
             )
+            self.query_one(f"#{pane_id}", Static).update(Group(headers_panel, body_panel))
             return
         tree.add_class("hidden")
         body_render = body_renderable(body, content_type)
-        if body_render is None:
-            group = Group(header_text, Text("\n(body 없음)", style="dim italic"))
-        else:
-            group = Group(header_text, Text(""), body_render)
-        self.query_one(f"#{pane_id}", Static).update(group)
+        body_content = body_render if body_render is not None else Text("(body 없음)", style="dim italic")
+        body_panel = Panel(
+            body_content,
+            title=f"{label} · Body",
+            title_align="left",
+            border_style=accent,
+            padding=(0, 1),
+        )
+        self.query_one(f"#{pane_id}", Static).update(Group(headers_panel, body_panel))
 
     def _render_tab_bar(self) -> None:
         """Render `[ Request ]   ( Response )` with brackets marking the active tab.
