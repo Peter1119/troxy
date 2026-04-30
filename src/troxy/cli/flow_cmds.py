@@ -13,14 +13,14 @@ from troxy.cli.utils import _resolve_db, _apply_no_color, _common_options
 @click.command("pending")
 @_common_options
 def pending_cmd(db, no_color):
-    """List pending (intercepted) flows awaiting release or drop."""
+    """릴리즈 또는 드롭 대기 중인 인터셉트 flow 목록을 출력합니다."""
     from troxy.core.intercept import list_pending_flows
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flows = list_pending_flows(db_path)
     if not flows:
-        click.echo("No pending flows.")
+        click.echo("대기 중인 flow가 없습니다.")
         return
     for f in flows:
         click.echo(f"[{f['id']}] {f['method']} {f['host']}{f['path']} ({f['status']})")
@@ -29,17 +29,17 @@ def pending_cmd(db, no_color):
 @click.command("modify")
 @_common_options
 @click.argument("pending_id", type=int)
-@click.option("--header", "headers", multiple=True, help="Header to set (Key: Value)")
-@click.option("--body", "request_body", default=None, help="New request body")
+@click.option("--header", "headers", multiple=True, help="설정할 헤더 (Key: Value)")
+@click.option("--body", "request_body", default=None, help="새 요청 body")
 def modify_cmd(db, no_color, pending_id, headers, request_body):
-    """Modify a pending flow's request headers or body."""
+    """대기 flow의 요청 헤더 또는 body를 수정합니다."""
     from troxy.core.intercept import get_pending_flow, update_pending_flow
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_pending_flow(db_path, pending_id)
     if not flow:
-        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        click.echo(f"대기 flow {pending_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
     new_headers = None
     if headers:
@@ -55,54 +55,54 @@ def modify_cmd(db, no_color, pending_id, headers, request_body):
     update_pending_flow(db_path, pending_id,
                         request_headers=new_headers,
                         request_body=request_body)
-    click.echo(f"Pending flow {pending_id} modified.")
+    click.echo(f"대기 flow {pending_id} 수정됨.")
 
 
 @click.command("release")
 @_common_options
 @click.argument("pending_id", type=int)
 def release_cmd(db, no_color, pending_id):
-    """Release a pending flow (mark as released)."""
+    """대기 flow를 릴리즈합니다."""
     from troxy.core.intercept import get_pending_flow, update_pending_flow
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_pending_flow(db_path, pending_id)
     if not flow:
-        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        click.echo(f"대기 flow {pending_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
     update_pending_flow(db_path, pending_id, status="released")
-    click.echo(f"Pending flow {pending_id} released.")
+    click.echo(f"대기 flow {pending_id} 릴리즈됨.")
 
 
 @click.command("drop")
 @_common_options
 @click.argument("pending_id", type=int)
 def drop_cmd(db, no_color, pending_id):
-    """Drop a pending flow (mark as dropped)."""
+    """대기 flow를 드롭합니다."""
     from troxy.core.intercept import get_pending_flow, update_pending_flow
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_pending_flow(db_path, pending_id)
     if not flow:
-        click.echo(f"Pending flow {pending_id} not found.", err=True)
+        click.echo(f"대기 flow {pending_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
     update_pending_flow(db_path, pending_id, status="dropped")
-    click.echo(f"Pending flow {pending_id} dropped.")
+    click.echo(f"대기 flow {pending_id} 드롭됨.")
 
 
 @click.command("replay")
 @_common_options
 @click.argument("flow_id", type=int)
 @click.option("--header", "headers_override", multiple=True,
-              help="Override/add header (Key: Value). Can be repeated.")
+              help="헤더 재정의/추가 (Key: Value). 반복 사용 가능.")
 @click.option("--body", "body_override", default=None,
-              help="Override request body")
+              help="요청 body 재정의")
 @click.option("--no-body", "hide_body", is_flag=True,
-              help="Don't print response body (default: print)")
+              help="응답 body 출력 안 함 (기본: 출력)")
 def replay_cmd(db, no_color, flow_id, headers_override, body_override, hide_body):
-    """Replay a captured flow. Decodes base64 bodies, prints response body by default."""
+    """캡처된 flow를 재전송합니다. base64 body 디코딩 및 응답 body 기본 출력."""
     import base64
     import urllib.request
     import urllib.error
@@ -111,7 +111,7 @@ def replay_cmd(db, no_color, flow_id, headers_override, body_override, hide_body
     init_db(db_path)
     flow = get_flow(db_path, flow_id)
     if not flow:
-        click.echo(f"Flow {flow_id} not found.", err=True)
+        click.echo(f"flow {flow_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
 
     scheme = flow.get("scheme", "https")
@@ -150,18 +150,18 @@ def replay_cmd(db, no_color, flow_id, headers_override, body_override, hide_body
     for k, v in headers.items():
         req.add_header(k, v)
 
-    click.echo(f"Replaying flow {flow_id}: {method} {url}")
+    click.echo(f"flow {flow_id} 재전송 중: {method} {url}")
     try:
         with urllib.request.urlopen(req) as resp:
-            click.echo(f"Response: {resp.status} {resp.reason}")
+            click.echo(f"응답: {resp.status} {resp.reason}")
             if not hide_body:
                 _print_replay_body(resp)
     except urllib.error.HTTPError as e:
-        click.echo(f"Response: {e.code} {e.reason}")
+        click.echo(f"응답: {e.code} {e.reason}")
         if not hide_body:
             _print_replay_body(e)
     except urllib.error.URLError as e:
-        click.echo(f"Error: {e.reason}", err=True)
+        click.echo(f"오류: {e.reason}", err=True)
         sys.exit(1)
 
 
@@ -175,7 +175,7 @@ def _print_replay_body(resp):
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        click.echo(f"(binary response, {len(data)} bytes)")
+        click.echo(f"(바이너리 응답, {len(data)} bytes)")
         return
     ct = resp.headers.get("Content-Type", "") if hasattr(resp, "headers") else ""
     if "json" in ct:
@@ -194,13 +194,13 @@ def _print_replay_body(resp):
 
 @click.command("tail")
 @_common_options
-@click.option("-d", "--domain", default=None, help="Filter by domain")
+@click.option("-d", "--domain", default=None, help="도메인 필터")
 @click.option("-s", "--status", default=None,
-              help="Filter by status code (exact, e.g. 401) or class (e.g. 4xx, 5xx)")
-@click.option("-m", "--method", default=None, help="Filter by HTTP method")
-@click.option("-n", "--count", default=10, type=int, help="Initial lines to show")
+              help="상태 코드 필터 (예: 401, 4xx, 5xx)")
+@click.option("-m", "--method", default=None, help="HTTP 메서드 필터")
+@click.option("-n", "--count", default=10, type=int, help="초기 출력 라인 수")
 def tail_cmd(db, no_color, domain, status, method, count):
-    """Tail new flows in real time (polls DB every 0.5s)."""
+    """새 flow를 실시간으로 감시합니다 (0.5초 간격 DB 폴링)."""
     import time as _time
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
@@ -217,7 +217,7 @@ def tail_cmd(db, no_color, domain, status, method, count):
         if f["id"] > last_id:
             last_id = f["id"]
 
-    click.echo("Tailing new flows... (Ctrl+C to stop)")
+    click.echo("새 flow 실시간 감시 중... (Ctrl+C 종료)")
     try:
         while True:
             _time.sleep(0.5)
@@ -258,7 +258,7 @@ def _parse_status_filter(status):
         return int(status), None
     except ValueError:
         raise click.BadParameter(
-            f"Invalid status filter: {status!r}. Use 401 or 4xx."
+            f"잘못된 상태 코드 필터: {status!r}. 401 또는 4xx 형식으로 입력하세요."
         )
 
 

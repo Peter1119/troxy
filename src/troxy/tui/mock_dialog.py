@@ -162,7 +162,7 @@ class MockDialog(ModalScreen):
             if has_glob:
                 with Horizontal(id="mock-glob-row"):
                     yield Switch(value=True, id="use-glob")
-                    yield Static("  use glob suggestion")
+                    yield Static("  glob 제안 사용")
             yield Label("Status:", classes="field-label")
             yield Select(
                 STATUS_OPTIONS,
@@ -173,7 +173,7 @@ class MockDialog(ModalScreen):
             yield Label("Body:", classes="field-label")
             yield TextArea(initial_body, id="mock-body", language="json")
             yield Static(
-                "Ctrl+S save \u00b7 Ctrl+L clear body \u00b7 Esc cancel",
+                "Ctrl+S \uc800\uc7a5 \u00b7 Ctrl+L body \ucd08\uae30\ud654 \u00b7 Esc \ucde8\uc18c",
                 classes="dialog-hint",
             )
 

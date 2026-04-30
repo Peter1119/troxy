@@ -54,13 +54,13 @@ def _human_size(body) -> str:
 @_common_options
 @click.argument("flow_id", type=int)
 def quick_cmd(db, no_color, flow_id):
-    """One-line summary for read-only inspection."""
+    """읽기 전용 검사용 한 줄 요약."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_flow(db_path, flow_id)
     if not flow:
-        click.echo(f"Flow {flow_id} not found.", err=True)
+        click.echo(f"flow {flow_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
 
     status = flow["status_code"]
@@ -86,13 +86,13 @@ def quick_cmd(db, no_color, flow_id):
 @_common_options
 @click.argument("flow_id", type=int)
 def explain_cmd(db, no_color, flow_id):
-    """Heuristic interpretation of a flow (runs locally, no AI)."""
+    """flow에 대한 휴리스틱 분석 (로컬 실행, AI 불필요)."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_flow(db_path, flow_id)
     if not flow:
-        click.echo(f"Flow {flow_id} not found.", err=True)
+        click.echo(f"flow {flow_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
 
     status = flow["status_code"]

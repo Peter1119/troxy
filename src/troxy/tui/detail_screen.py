@@ -139,7 +139,7 @@ class DetailScreen(Screen):
         content_type,
     ) -> None:
         is_request = pane_id == "request-pane"
-        label = "REQUEST" if is_request else "RESPONSE"
+        label = "요청" if is_request else "응답"
         if is_request:
             accent = method_color(self._flow["method"])
         else:
@@ -148,7 +148,7 @@ class DetailScreen(Screen):
         header_text = render_headers(parse_headers(headers_raw))
         headers_panel = Panel(
             header_text,
-            title=f"{label} · Headers",
+            title=f"{label} · 헤더",
             title_align="left",
             border_style=accent,
             padding=(0, 1),
@@ -161,7 +161,7 @@ class DetailScreen(Screen):
             populate_json_tree(tree, json_data)
             body_panel = Panel(
                 Text("(body — Tree 아래에서 ⏎ 펼치기/접기)", style="dim italic"),
-                title=f"{label} · Body (JSON)",
+                title=f"{label} · body (JSON)",
                 title_align="left",
                 border_style=accent,
                 padding=(0, 1),
@@ -173,7 +173,7 @@ class DetailScreen(Screen):
         body_content = body_render if body_render is not None else Text("(body 없음)", style="dim italic")
         body_panel = Panel(
             body_content,
-            title=f"{label} · Body",
+            title=f"{label} · body",
             title_align="left",
             border_style=accent,
             padding=(0, 1),
@@ -192,7 +192,7 @@ class DetailScreen(Screen):
         for i, name in enumerate(("request", "response")):
             if i > 0:
                 t.append("   ")
-            label = "Request" if name == "request" else "Response"
+            label = "요청" if name == "request" else "응답"
             if self._active_tab == name:
                 t.append(f"[ {label} ]", style="bold reverse")
             else:

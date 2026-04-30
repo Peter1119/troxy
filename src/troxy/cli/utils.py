@@ -24,7 +24,7 @@ def _parse_since(since: str | None) -> float | None:
         except ValueError:
             pass
     raise click.BadParameter(
-        f"Invalid time format: {since!r}. Use Ns, Nm, Nh, or Nd (e.g. 30s, 5m, 1h, 2d)."
+        f"잘못된 시간 형식: {since!r}. Ns, Nm, Nh, Nd 형식을 사용하세요 (예: 30s, 5m, 1h, 2d)."
     )
 
 
