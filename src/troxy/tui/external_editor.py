@@ -39,3 +39,52 @@ def resolve_editor() -> str | None:
         if shutil.which(fallback):
             return fallback
     return None
+
+
+def ext_for_content_type(content_type: str | None) -> str:
+    """Return a file extension for the given MIME type.
+
+    Used to give the temp file a meaningful extension so editors can
+    apply syntax highlighting.
+    """
+    if not content_type:
+        return ".txt"
+    ct = content_type.lower()
+    if "json" in ct:
+        return ".json"
+    if "xml" in ct:
+        return ".xml"
+    if "html" in ct:
+        return ".html"
+    return ".txt"
+
+
+def prettify_body(body: str, content_type: str | None) -> str:
+    """Pretty-print body when content_type is JSON; return verbatim otherwise.
+
+    Invalid JSON falls through to the raw string — editing a mock should
+    never silently corrupt the user's payload.
+    """
+    if not body:
+        return ""
+    if content_type and "json" in content_type.lower():
+        try:
+            return json.dumps(json.loads(body), indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return body
+
+
+def validate_json_body(body: str) -> tuple[bool, str]:
+    """Validate body as JSON.
+
+    Returns (True, "") on success or empty body.
+    Returns (False, "<human message>") on parse error with line/col.
+    """
+    if not body.strip():
+        return True, ""
+    try:
+        json.loads(body)
+        return True, ""
+    except json.JSONDecodeError as e:
+        return False, f"JSON 오류: {e.lineno}행 {e.colno}열 — {e.msg}"
