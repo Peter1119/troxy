@@ -144,3 +144,120 @@ def test_validate_json_multiline_error_line_number():
     ok, msg = validate_json_body(body)
     assert ok is False
     assert "3행" in msg
+
+
+# ---------- open_in_editor ----------
+
+import os
+import asyncio
+from contextlib import asynccontextmanager
+from unittest.mock import MagicMock, patch
+
+
+@pytest.fixture
+def mock_app():
+    """Minimal App mock exposing an async suspend() context manager."""
+    app = MagicMock()
+
+    @asynccontextmanager
+    async def _suspend():
+        yield
+
+    app.suspend = _suspend
+    return app
+
+
+@pytest.mark.asyncio
+async def test_open_in_editor_returns_edited_content(monkeypatch, mock_app):
+    """Editor writes new content → function returns that content."""
+    def fake_run(cmd, **kwargs):
+        with open(cmd[1], "w") as f:
+            f.write("edited body")
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/nano" if cmd == "nano" else None)
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+
+    from troxy.tui.external_editor import open_in_editor
+    result = await open_in_editor("original", "application/json", mock_app)
+    assert result == "edited body"
+
+
+@pytest.mark.asyncio
+async def test_open_in_editor_raises_when_no_editor(monkeypatch, mock_app):
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+    from troxy.tui.external_editor import open_in_editor, EditorNotFoundError
+    with pytest.raises(EditorNotFoundError):
+        await open_in_editor("body", None, mock_app)
+
+
+@pytest.mark.asyncio
+async def test_open_in_editor_raises_cancelled_on_nonzero_exit(monkeypatch, mock_app):
+    """returncode != 0 → EditorCancelledError (user quit without saving)."""
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 1
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/nano" if cmd == "nano" else None)
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+
+    from troxy.tui.external_editor import open_in_editor, EditorCancelledError
+    with pytest.raises(EditorCancelledError):
+        await open_in_editor("body", None, mock_app)
+
+
+@pytest.mark.asyncio
+async def test_open_in_editor_deletes_temp_file(monkeypatch, mock_app):
+    """Temp file must be deleted regardless of editor outcome."""
+    captured_path: list[str] = []
+
+    def fake_run(cmd, **kwargs):
+        captured_path.append(cmd[1])
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/nano" if cmd == "nano" else None)
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+
+    from troxy.tui.external_editor import open_in_editor
+    await open_in_editor("body", "application/json", mock_app)
+
+    assert captured_path, "subprocess.run was not called"
+    assert not os.path.exists(captured_path[0]), "temp file was not deleted"
+
+
+@pytest.mark.asyncio
+async def test_open_in_editor_deletes_temp_file_even_on_cancel(monkeypatch, mock_app):
+    """Temp file must be deleted even when editor exits with error."""
+    captured_path: list[str] = []
+
+    def fake_run(cmd, **kwargs):
+        captured_path.append(cmd[1])
+        result = MagicMock()
+        result.returncode = 1
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/nano" if cmd == "nano" else None)
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+
+    from troxy.tui.external_editor import open_in_editor, EditorCancelledError
+    with pytest.raises(EditorCancelledError):
+        await open_in_editor("body", None, mock_app)
+
+    assert captured_path
+    assert not os.path.exists(captured_path[0]), "temp file leaked on cancel"

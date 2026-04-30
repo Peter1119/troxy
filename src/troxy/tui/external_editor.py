@@ -88,3 +88,59 @@ def validate_json_body(body: str) -> tuple[bool, str]:
         return True, ""
     except json.JSONDecodeError as e:
         return False, f"JSON 오류: {e.lineno}행 {e.colno}열 — {e.msg}"
+
+
+async def open_in_editor(
+    body: str, content_type: str | None, app: App
+) -> str:
+    """Open *body* in an external editor and return the edited text.
+
+    Uses ``App.suspend()`` to pause Textual while the editor runs.
+    The temporary file is always deleted — even on error — to avoid
+    leaking potentially sensitive payload data to disk.
+
+    Raises:
+        EditorNotFoundError: No usable editor found on PATH.
+        EditorCancelledError: Editor exited with non-zero returncode
+            (treat as user cancellation).
+        EditorIOError: Temp file could not be written or read.
+    """
+    editor = resolve_editor()
+    if editor is None:
+        raise EditorNotFoundError(
+            "에디터를 찾을 수 없습니다. $VISUAL 또는 $EDITOR 환경변수를 설정하세요."
+        )
+
+    ext = ext_for_content_type(content_type)
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=ext, delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            f.write(body)
+            tmp_path = f.name
+
+        async with app.suspend():
+            result = subprocess.run([editor, tmp_path])
+
+        if result.returncode != 0:
+            raise EditorCancelledError(
+                f"에디터가 비정상 종료되었습니다 (returncode={result.returncode})."
+            )
+
+        try:
+            with open(tmp_path, encoding="utf-8") as f:
+                return f.read()
+        except OSError as exc:
+            raise EditorIOError(f"편집 파일 읽기 실패: {exc}") from exc
+
+    except (EditorNotFoundError, EditorCancelledError, EditorIOError):
+        raise
+    except OSError as exc:
+        raise EditorIOError(f"임시 파일 IO 오류: {exc}") from exc
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
