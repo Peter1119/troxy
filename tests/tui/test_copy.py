@@ -19,28 +19,28 @@ from troxy.tui.copy import (
 
 
 def test_list_hint_contains_all_actions():
-    assert "filter" in LIST_HINT
+    assert "필터" in LIST_HINT
     assert "mock" in LIST_HINT
-    assert "clear" in LIST_HINT
-    assert "quit" in LIST_HINT
-    assert "detail" in LIST_HINT
-    assert "browse" in LIST_HINT
+    assert "초기화" in LIST_HINT
+    assert "종료" in LIST_HINT
+    assert "상세" in LIST_HINT
+    assert "사이드" in LIST_HINT
 
 
 def test_detail_hint_contains_all_actions():
-    assert "copy" in DETAIL_HINT
-    assert "scroll" in DETAIL_HINT
+    assert "복사" in DETAIL_HINT
+    assert "스크롤" in DETAIL_HINT
     assert "mock" in DETAIL_HINT
     assert "curl" in DETAIL_HINT
     assert "Esc" in DETAIL_HINT
-    assert "switch tab" in DETAIL_HINT
+    assert "탭 전환" in DETAIL_HINT
 
 
 def test_mock_list_hint_contains_all_actions():
-    assert "toggle" in MOCK_LIST_HINT
-    assert "edit" in MOCK_LIST_HINT
-    assert "delete" in MOCK_LIST_HINT
-    assert "back" in MOCK_LIST_HINT
+    assert "토글" in MOCK_LIST_HINT
+    assert "편집" in MOCK_LIST_HINT
+    assert "삭제" in MOCK_LIST_HINT
+    assert "뒤로" in MOCK_LIST_HINT
 
 
 def test_copy_options_has_six_entries():
@@ -54,7 +54,7 @@ def test_filter_status_text():
     # so "Esc" copy was removed and replaced with "f to edit".
     result = filter_status_text("host:api.* status:4xx")
     assert "host:api.* status:4xx" in result
-    assert "f to edit" in result
+    assert "f 편집" in result
     assert "Esc" not in result
 
 
@@ -79,25 +79,25 @@ def test_toast_copied_large():
 def test_toast_mock_saved():
     result = toast_mock_saved("users-401")
     assert "users-401" in result
-    assert "enabled" in result
+    assert "활성화" in result
 
 
 def test_toast_mock_deleted():
     result = toast_mock_deleted("login-200")
     assert "login-200" in result
-    assert "deleted" in result
+    assert "삭제됨" in result
 
 
 def test_toast_cleared():
     result = toast_cleared(42)
     assert "42" in result
-    assert "cleared" in result
+    assert "초기화됨" in result
 
 
 def test_toast_intercept_placeholder():
     result = toast_intercept_placeholder()
     assert "v0.4" in result
-    assert "intercept" in result
+    assert "인터셉트" in result
 
 
 def test_confirm_clear():
@@ -129,9 +129,9 @@ def test_header_text():
     result = header_text("~/.troxy/flows.db", 1247)
     assert "~/.troxy/flows.db" in result
     assert "1,247" in result
-    assert "flows" in result
+    assert "개 flow" in result
 
 
 def test_header_text_zero():
     result = header_text("/tmp/test.db", 0)
-    assert "0 flows" in result
+    assert "0개 flow" in result

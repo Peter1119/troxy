@@ -35,23 +35,23 @@ def _parse_steps(steps_str: str) -> list[dict]:
 
 @click.group("scenario")
 def scenario_group():
-    """Manage scenario (scripted) mock rules."""
+    """시나리오 mock 규칙을 관리합니다."""
 
 
 @scenario_group.command("add")
-@click.option("--db", default=None, help="Database path")
-@click.option("-d", "--domain", default=None, help="Domain to match")
-@click.option("-p", "--path", "path_pattern", default=None, help="Path glob pattern")
-@click.option("-m", "--method", default=None, help="HTTP method to match")
+@click.option("--db", default=None, help="데이터베이스 경로")
+@click.option("-d", "--domain", default=None, help="매칭할 도메인")
+@click.option("-p", "--path", "path_pattern", default=None, help="경로 glob 패턴")
+@click.option("-m", "--method", default=None, help="매칭할 HTTP 메서드")
 @click.option(
     "-s", "--steps", "steps_json", required=True,
-    help="JSON array of step objects, e.g. '[{\"status_code\":200},{\"status_code\":500}]'",
+    help="단계 객체 JSON 배열, 예: '[{\"status_code\":200},{\"status_code\":500}]'",
 )
 @click.option("--loop", is_flag=True, default=False,
-              help="Cycle back to step 1 after last step (default: repeat last)")
-@click.option("--name", default=None, help="Optional name for easy reference")
+              help="마지막 단계 후 1단계로 순환 (기본: 마지막 단계 반복)")
+@click.option("--name", default=None, help="편리한 참조를 위한 이름")
 def scenario_add_cmd(db, domain, path_pattern, method, steps_json, loop, name):
-    """Add a scenario mock rule with sequential responses."""
+    """순차 응답 시나리오 mock 규칙을 추가합니다."""
     from troxy.core.scenarios import add_scenario
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -74,15 +74,15 @@ def scenario_add_cmd(db, domain, path_pattern, method, steps_json, loop, name):
         click.echo(str(e), err=True)
         sys.exit(1)
     label = f"{sid} ({name!r})" if name else str(sid)
-    click.echo(f"Scenario rule {label} added.")
+    click.echo(f"시나리오 규칙 {label} 추가됨.")
 
 
 @scenario_group.command("list")
-@click.option("--db", default=None, help="Database path")
-@click.option("--no-color", is_flag=True, help="Disable color output")
-@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.option("--db", default=None, help="데이터베이스 경로")
+@click.option("--no-color", is_flag=True, help="색상 출력 비활성화")
+@click.option("--json", "as_json", is_flag=True, help="JSON 형식으로 출력")
 def scenario_list_cmd(db, no_color, as_json):
-    """List scenario mock rules."""
+    """시나리오 mock 규칙 목록을 출력합니다."""
     from troxy.core.scenarios import list_scenarios
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
@@ -92,7 +92,7 @@ def scenario_list_cmd(db, no_color, as_json):
         click.echo(json.dumps(scenarios, indent=2, ensure_ascii=False, default=str))
         return
     if not scenarios:
-        click.echo("No scenario rules.")
+        click.echo("시나리오 규칙이 없습니다.")
         return
     for s in scenarios:
         name_label = f" '{s['name']}'" if s.get("name") else ""
@@ -107,10 +107,10 @@ def scenario_list_cmd(db, no_color, as_json):
 
 
 @scenario_group.command("remove")
-@click.option("--db", default=None, help="Database path")
+@click.option("--db", default=None, help="데이터베이스 경로")
 @click.argument("rule_ref")
 def scenario_remove_cmd(db, rule_ref):
-    """Remove a scenario rule by ID or name."""
+    """ID 또는 이름으로 시나리오 규칙을 삭제합니다."""
     from troxy.core.scenarios import remove_scenario, resolve_scenario_ref
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -120,14 +120,14 @@ def scenario_remove_cmd(db, rule_ref):
         click.echo(str(e), err=True)
         sys.exit(1)
     remove_scenario(db_path, sid)
-    click.echo(f"Scenario rule {sid} removed.")
+    click.echo(f"시나리오 규칙 {sid} 삭제됨.")
 
 
 @scenario_group.command("disable")
-@click.option("--db", default=None, help="Database path")
+@click.option("--db", default=None, help="데이터베이스 경로")
 @click.argument("rule_ref")
 def scenario_disable_cmd(db, rule_ref):
-    """Disable a scenario rule by ID or name."""
+    """ID 또는 이름으로 시나리오 규칙을 비활성화합니다."""
     from troxy.core.scenarios import toggle_scenario, resolve_scenario_ref
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -137,14 +137,14 @@ def scenario_disable_cmd(db, rule_ref):
         click.echo(str(e), err=True)
         sys.exit(1)
     toggle_scenario(db_path, sid, enabled=False)
-    click.echo(f"Scenario rule {sid} disabled.")
+    click.echo(f"시나리오 규칙 {sid} 비활성화됨.")
 
 
 @scenario_group.command("enable")
-@click.option("--db", default=None, help="Database path")
+@click.option("--db", default=None, help="데이터베이스 경로")
 @click.argument("rule_ref")
 def scenario_enable_cmd(db, rule_ref):
-    """Enable a scenario rule by ID or name."""
+    """ID 또는 이름으로 시나리오 규칙을 활성화합니다."""
     from troxy.core.scenarios import toggle_scenario, resolve_scenario_ref
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -154,14 +154,14 @@ def scenario_enable_cmd(db, rule_ref):
         click.echo(str(e), err=True)
         sys.exit(1)
     toggle_scenario(db_path, sid, enabled=True)
-    click.echo(f"Scenario rule {sid} enabled.")
+    click.echo(f"시나리오 규칙 {sid} 활성화됨.")
 
 
 @scenario_group.command("reset")
-@click.option("--db", default=None, help="Database path")
+@click.option("--db", default=None, help="데이터베이스 경로")
 @click.argument("rule_ref")
 def scenario_reset_cmd(db, rule_ref):
-    """Reset a scenario's step counter to the beginning."""
+    """시나리오 단계 카운터를 초기화합니다."""
     from troxy.core.scenarios import reset_scenario, resolve_scenario_ref
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -171,16 +171,16 @@ def scenario_reset_cmd(db, rule_ref):
         click.echo(str(e), err=True)
         sys.exit(1)
     reset_scenario(db_path, sid)
-    click.echo(f"Scenario rule {sid} reset to step 1.")
+    click.echo(f"시나리오 규칙 {sid} 1단계로 초기화됨.")
 
 
 @scenario_group.command("from-flows")
-@click.option("--db", default=None, help="Database path")
+@click.option("--db", default=None, help="데이터베이스 경로")
 @click.argument("flow_ids", nargs=-1, type=int, required=True)
-@click.option("--name", default=None, help="Optional name for the scenario")
-@click.option("--loop", is_flag=True, default=False, help="Cycle back after last step")
+@click.option("--name", default=None, help="시나리오 이름 (선택)")
+@click.option("--loop", is_flag=True, default=False, help="마지막 단계 후 1단계로 순환")
 def scenario_from_flows_cmd(db, flow_ids, name, loop):
-    """Create a scenario from multiple flow responses in order."""
+    """여러 flow 응답으로 순서대로 시나리오를 생성합니다."""
     from troxy.core.scenarios import scenario_from_flows
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -190,4 +190,4 @@ def scenario_from_flows_cmd(db, flow_ids, name, loop):
         click.echo(str(e), err=True)
         sys.exit(1)
     label = f"{sid} ({name!r})" if name else str(sid)
-    click.echo(f"Scenario rule {label} created from {len(flow_ids)} flow(s).")
+    click.echo(f"{len(flow_ids)}개 flow에서 시나리오 규칙 {label} 생성됨.")

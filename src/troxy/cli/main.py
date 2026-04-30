@@ -14,20 +14,20 @@ from troxy.cli.utils import _parse_since, _common_options, _resolve_db, _apply_n
 
 @click.group()
 def cli():
-    """troxy — terminal proxy inspector."""
+    """troxy — 터미널 프록시 인스펙터."""
 
 
 @cli.command("flows")
 @_common_options
-@click.option("-d", "--domain", default=None, help="Filter by domain (partial match)")
-@click.option("-s", "--status", default=None, type=int, help="Filter by status code")
-@click.option("-m", "--method", default=None, help="Filter by HTTP method")
-@click.option("-p", "--path", "path_filter", default=None, help="Filter by path (partial match)")
-@click.option("-n", "--limit", default=50, type=int, help="Max results")
-@click.option("--since", default=None, help="Time filter (e.g. 5m, 1h)")
-@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.option("-d", "--domain", default=None, help="도메인 필터 (부분 일치)")
+@click.option("-s", "--status", default=None, type=int, help="상태 코드 필터")
+@click.option("-m", "--method", default=None, help="HTTP 메서드 필터")
+@click.option("-p", "--path", "path_filter", default=None, help="경로 필터 (부분 일치)")
+@click.option("-n", "--limit", default=50, type=int, help="최대 결과 수")
+@click.option("--since", default=None, help="시간 필터 (예: 5m, 1h)")
+@click.option("--json", "as_json", is_flag=True, help="JSON 형식으로 출력")
 def flows_cmd(db, no_color, domain, status, method, path_filter, limit, since, as_json):
-    """List captured flows."""
+    """캡처된 flow 목록을 출력합니다."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -38,7 +38,7 @@ def flows_cmd(db, no_color, domain, status, method, path_filter, limit, since, a
         click.echo(json.dumps(results, indent=2, ensure_ascii=False, default=str))
         return
     if not results:
-        click.echo("No flows found.")
+        click.echo("flow가 없습니다.")
         return
     from troxy.cli.formatting import print_flows_table
     print_flows_table(results)
@@ -47,24 +47,24 @@ def flows_cmd(db, no_color, domain, status, method, path_filter, limit, since, a
 @cli.command("flow")
 @_common_options
 @click.argument("flow_id", type=int)
-@click.option("--request", "request_only", is_flag=True, help="Show request only")
-@click.option("--response", "response_only", is_flag=True, help="Show response only")
-@click.option("--headers", "headers_only", is_flag=True, help="Show headers only")
-@click.option("--body", "body_only", is_flag=True, help="Show body only")
-@click.option("--raw", is_flag=True, help="Raw output without formatting")
-@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.option("--request", "request_only", is_flag=True, help="요청만 출력")
+@click.option("--response", "response_only", is_flag=True, help="응답만 출력")
+@click.option("--headers", "headers_only", is_flag=True, help="헤더만 출력")
+@click.option("--body", "body_only", is_flag=True, help="body만 출력")
+@click.option("--raw", is_flag=True, help="포맷 없이 원시 출력")
+@click.option("--json", "as_json", is_flag=True, help="JSON 형식으로 출력")
 @click.option("--export", "export_format", type=click.Choice(["curl", "httpie"]),
-              default=None, help="Export format")
-@click.option("--no-hint", is_flag=True, help="Suppress Claude MCP hint at the bottom")
+              default=None, help="내보내기 형식")
+@click.option("--no-hint", is_flag=True, help="하단 Claude MCP 힌트 숨기기")
 def flow_cmd(db, no_color, flow_id, request_only, response_only, headers_only, body_only,
              raw, as_json, export_format, no_hint):
-    """Show flow details."""
+    """flow 상세 정보를 출력합니다."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     flow = get_flow(db_path, flow_id)
     if not flow:
-        click.echo(f"Flow {flow_id} not found.", err=True)
+        click.echo(f"flow {flow_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
 
     if export_format == "curl":
@@ -94,13 +94,13 @@ def flow_cmd(db, no_color, flow_id, request_only, response_only, headers_only, b
 @cli.command("search")
 @_common_options
 @click.argument("query")
-@click.option("-d", "--domain", default=None, help="Filter by domain")
+@click.option("-d", "--domain", default=None, help="도메인 필터")
 @click.option("--in", "scope", type=click.Choice(["request", "response", "all"]),
-              default="all", help="Search scope")
-@click.option("-n", "--limit", default=50, type=int, help="Max results")
-@click.option("--json", "as_json", is_flag=True, help="JSON output")
+              default="all", help="검색 범위")
+@click.option("-n", "--limit", default=50, type=int, help="최대 결과 수")
+@click.option("--json", "as_json", is_flag=True, help="JSON 형식으로 출력")
 def search_cmd(db, no_color, query, domain, scope, limit, as_json):
-    """Search flow bodies for text."""
+    """flow body에서 텍스트를 검색합니다."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -109,7 +109,7 @@ def search_cmd(db, no_color, query, domain, scope, limit, as_json):
         click.echo(json.dumps(results, indent=2, ensure_ascii=False, default=str))
         return
     if not results:
-        click.echo("No matching flows.")
+        click.echo("일치하는 flow가 없습니다.")
         return
     from troxy.cli.formatting import print_flows_table
     print_flows_table(results)
@@ -118,7 +118,7 @@ def search_cmd(db, no_color, query, domain, scope, limit, as_json):
 @cli.command("status")
 @_common_options
 def status_cmd(db, no_color):
-    """Show database status."""
+    """데이터베이스 상태를 출력합니다."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
@@ -132,15 +132,15 @@ def status_cmd(db, no_color):
 
 @cli.command("clear")
 @_common_options
-@click.option("--before", default=None, help="Clear flows older than (e.g. 1h)")
-@click.option("--yes", is_flag=True, help="Skip confirmation")
+@click.option("--before", default=None, help="이전 flow 삭제 (예: 1h)")
+@click.option("--yes", is_flag=True, help="확인 단계 건너뛰기")
 def clear_cmd(db, no_color, before, yes):
-    """Clear all flows."""
+    """전체 flow를 삭제합니다."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
     if not yes:
-        click.confirm("Delete all flows?", abort=True)
+        click.confirm("전체 flow를 삭제할까요?", abort=True)
     conn = get_connection(db_path)
     if before:
         seconds = _parse_since(before)
@@ -151,15 +151,15 @@ def clear_cmd(db, no_color, before, yes):
         conn.execute("DELETE FROM flows")
     conn.commit()
     conn.close()
-    click.echo("Flows cleared.")
+    click.echo("flow 초기화 완료.")
 
 
 @cli.command("start")
-@click.option("-p", "--port", default=8080, type=int, help="Proxy port")
-@click.option("--mode", default=None, help="Proxy mode (e.g. regular, transparent)")
+@click.option("-p", "--port", default=8080, type=int, help="프록시 포트")
+@click.option("--mode", default=None, help="프록시 모드 (예: regular, transparent)")
 @_common_options
 def start_cmd(port, mode, db, no_color):
-    """Start mitmproxy (headless) + troxy TUI."""
+    """mitmproxy(헤드리스) + troxy TUI 실행."""
     _apply_no_color(no_color)
     from troxy.tui.app import TroxyStartApp
     from troxy.tui.proxy import ProxyManager, ProxyBootError
@@ -171,7 +171,7 @@ def start_cmd(port, mode, db, no_color):
     try:
         proxy.start()
     except ProxyBootError as e:
-        click.echo(f"troxy start failed:\n{e}", err=True)
+        click.echo(f"troxy start 실패:\n{e}", err=True)
         sys.exit(2)
     except RuntimeError as e:
         click.echo(str(e), err=True)

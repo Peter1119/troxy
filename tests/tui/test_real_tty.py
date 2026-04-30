@@ -241,9 +241,9 @@ def test_real_tty_enter_opens_detail_screen(tmp_path):
     child = _spawn_tui_with_flow(db)
     try:
         child.send("\r")  # Enter
-        # DetailScreen renders "── Request ──" in the request pane.
-        # pexpect can match across VT escape bytes for contiguous ASCII.
-        child.expect("Request", timeout=5)
+        # DetailScreen renders "── 요청 ──" in the request pane.
+        # pexpect can match across VT escape bytes for contiguous characters.
+        child.expect("요청", timeout=5)
     finally:
         _terminate(child)
 
@@ -261,16 +261,16 @@ def test_real_tty_detail_escape_returns_to_list(tmp_path):
     app. Double-Esc forces the first byte to resolve as a completed key.
 
     Signal: after go_back the ListScreen renders ``LIST_HINT`` which
-    contains the word ``filter``. If the fix is removed, DetailScreen
-    stays mounted and ``filter`` never appears → this expect() times out.
+    contains the word ``필터``. If the fix is removed, DetailScreen
+    stays mounted and ``필터`` never appears → this expect() times out.
     """
     db = str(tmp_path / "qa.db")
     child = _spawn_tui_with_flow(db)
     try:
         child.send("\r")  # Enter → DetailScreen
-        child.expect("Request", timeout=5)
+        child.expect("요청", timeout=5)
         child.send("\x1b\x1b")  # Double ESC → forces key resolution
-        child.expect("filter", timeout=5)
+        child.expect("필터", timeout=5)
     finally:
         _terminate(child)
 

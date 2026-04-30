@@ -15,21 +15,21 @@ from troxy.cli.utils import _resolve_db, _apply_no_color, _common_options
 
 @click.command("pick")
 @_common_options
-@click.option("-d", "--domain", default=None, help="Pre-filter by domain")
-@click.option("-s", "--status", default=None, type=int, help="Pre-filter by status code")
+@click.option("-d", "--domain", default=None, help="도메인으로 사전 필터")
+@click.option("-s", "--status", default=None, type=int, help="상태 코드로 사전 필터")
 @click.option("-n", "--limit", default=100, type=int,
-              help="Max flows to load (default 100; large values hurt responsiveness)")
+              help="최대 로드 flow 수 (기본 100; 클수록 반응 저하)")
 @click.option("--last", default=None, type=int,
-              help="Non-TTY fallback: print the last N flow IDs instead of opening picker")
+              help="비TTY 폴백: picker 대신 마지막 N개 flow ID 출력")
 def pick_cmd(db, no_color, domain, status, limit, last):
-    """Interactive flow picker — arrow keys to browse, Enter to see detail."""
+    """대화형 flow 선택기 — 화살표로 이동, Enter로 상세 보기."""
     _apply_no_color(no_color)
     db_path = _resolve_db(db)
     init_db(db_path)
 
     flows = list_flows(db_path, domain=domain, status=status, limit=limit)
     if not flows:
-        click.echo("No flows to pick.")
+        click.echo("선택할 flow가 없습니다.")
         return
 
     if not sys.stdout.isatty() or not sys.stdin.isatty():
@@ -40,8 +40,8 @@ def pick_cmd(db, no_color, domain, status, limit, last):
                 )
             return
         click.echo(
-            "troxy pick requires an interactive terminal. "
-            "Use `troxy flows` (table) or `troxy pick --last 10` (tab-separated list) instead.",
+            "troxy pick은 인터랙티브 터미널이 필요합니다. "
+            "`troxy flows`(표) 또는 `troxy pick --last 10`(탭 구분 목록)을 사용하세요.",
             err=True,
         )
         sys.exit(1)
@@ -52,7 +52,7 @@ def pick_cmd(db, no_color, domain, status, limit, last):
 
     flow = get_flow(db_path, chosen_id)
     if not flow:
-        click.echo(f"Flow {chosen_id} not found.", err=True)
+        click.echo(f"flow {chosen_id}를 찾을 수 없습니다.", err=True)
         sys.exit(1)
 
     from troxy.cli.formatting import print_flow_detail
@@ -71,7 +71,7 @@ def _pick_loop(stdscr, flows):
         stdscr.erase()
         stdscr.addnstr(
             0, 0,
-            "troxy pick — ↑/↓ move, Enter=detail, q=quit",
+            "troxy pick — ↑/↓ 이동, Enter=상세, q=종료",
             w - 1, curses.A_BOLD,
         )
         body_rows = max(h - 2, 1)
@@ -91,7 +91,7 @@ def _pick_loop(stdscr, flows):
 
         stdscr.addnstr(
             h - 1, 0,
-            f"[{cursor + 1}/{len(flows)}]  (Enter to inspect, q to cancel)",
+            f"[{cursor + 1}/{len(flows)}]  (Enter=상세, q=취소)",
             w - 1, curses.A_DIM,
         )
         stdscr.refresh()

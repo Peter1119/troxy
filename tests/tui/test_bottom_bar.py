@@ -40,9 +40,9 @@ def test_status_summary_line_recording_active():
     line = copy.status_summary_line(
         recording=True, flow_count=12, mock_count=3, mcp_enabled=False
     )
-    assert "recording" in line
-    assert "12 flows" in line
-    assert "3 mocks" in line
+    assert "캡처 중" in line
+    assert "12개 flow" in line
+    assert "3개 mock" in line
     assert "MCP" not in line
 
 
@@ -51,8 +51,8 @@ def test_status_summary_line_paused_when_proxy_dead():
     line = copy.status_summary_line(
         recording=False, flow_count=0, mock_count=0, mcp_enabled=False
     )
-    assert "paused" in line
-    assert "recording" not in line
+    assert "일시정지" in line
+    assert "캡처 중" not in line
 
 
 def test_status_summary_line_mcp_hint_appended():
@@ -127,7 +127,7 @@ async def test_bottom_bar_status_line_counts_only_enabled_mocks(tmp_db):
         await pilot.pause()
         info = app.screen.query_one("#info-bar", Static)
         text = str(info.render())
-        assert "1 mocks" in text
+        assert "1개 mock" in text
         await pilot.press("q")
 
 
@@ -141,7 +141,7 @@ async def test_bottom_bar_status_line_shows_recording_by_default(tmp_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         info = app.screen.query_one("#info-bar", Static)
-        assert "recording" in str(info.render())
+        assert "캡처 중" in str(info.render())
         await pilot.press("q")
 
 
@@ -154,7 +154,7 @@ async def test_bottom_bar_status_line_shows_paused_when_proxy_fn_false(tmp_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         info = app.screen.query_one("#info-bar", Static)
-        assert "paused" in str(info.render())
+        assert "일시정지" in str(info.render())
         await pilot.press("q")
 
 

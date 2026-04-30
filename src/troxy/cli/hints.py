@@ -51,14 +51,14 @@ def _mcp_registered() -> bool:
 def flow_hint(flow_id: int) -> str:
     """Short hint shown after `troxy flow` output."""
     return (
-        f"\n💡 Ask Claude: \"troxy_get_flow({flow_id})\" or "
-        f"\"Why did flow {flow_id} return {{status}}?\""
+        f"\n💡 Claude에 물어보세요: \"troxy_get_flow({flow_id})\" 또는 "
+        f"\"flow {flow_id}이 {{status}}를 반환한 이유는?\""
     )
 
 
 def explain_hint(flow_id: int) -> str:
     """Hint shown after `troxy explain` when heuristics are exhausted."""
     return (
-        f"\n💡 Need more analysis? Ask Claude: "
-        f"\"troxy_get_flow({flow_id}, part='response')\" and explain."
+        f"\n💡 더 자세한 분석이 필요하다면 Claude에: "
+        f"\"troxy_get_flow({flow_id}, part='response')\" 후 설명 요청"
     )

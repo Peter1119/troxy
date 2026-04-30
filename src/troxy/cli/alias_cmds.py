@@ -52,11 +52,11 @@ def _save(data: dict) -> None:
 @click.group("alias", invoke_without_command=True)
 @click.pass_context
 def alias_group(ctx):
-    """Manage command aliases (list if no subcommand)."""
+    """명령 별칭을 관리합니다 (하위 명령 없이 실행 시 목록 출력)."""
     if ctx.invoked_subcommand is None:
         data = _load()
         if not data:
-            click.echo("No aliases defined. Try: troxy alias add auth \"flows -s 401\"")
+            click.echo("등록된 별칭이 없습니다. 사용 예: troxy alias add auth \"flows -s 401\"")
             return
         for name, cmd in sorted(data.items()):
             click.echo(f"  {name} → troxy {cmd}")
@@ -66,19 +66,19 @@ def alias_group(ctx):
 @click.argument("name")
 @click.argument("command")
 def alias_add_cmd(name: str, command: str):
-    """Add or replace an alias.
+    """별칭을 추가하거나 교체합니다.
 
-    NAME is the alias shortname. COMMAND is the troxy subcommand + args as a single string.
-    Example: troxy alias add auth "flows -s 401 --no-color"
+    NAME은 별칭 단축명, COMMAND는 troxy 하위 명령 + 인자를 하나의 문자열로 지정합니다.
+    예: troxy alias add auth "flows -s 401 --no-color"
     """
     if name in _RESERVED_NAMES:
         click.echo(
-            f"'{name}' is a built-in command name. Pick a different alias.",
+            f"'{name}'은 내장 명령 이름입니다. 다른 별칭을 사용하세요.",
             err=True,
         )
         sys.exit(1)
     if not name.replace("-", "").replace("_", "").isalnum():
-        click.echo("Alias name must be alphanumeric (with - or _).", err=True)
+        click.echo("별칭 이름은 영숫자 (- 또는 _ 포함)여야 합니다.", err=True)
         sys.exit(1)
     data = _load()
     data[name] = command
@@ -89,24 +89,24 @@ def alias_add_cmd(name: str, command: str):
 @alias_group.command("remove")
 @click.argument("name")
 def alias_remove_cmd(name: str):
-    """Remove an alias."""
+    """별칭을 삭제합니다."""
     data = _load()
     if name not in data:
-        click.echo(f"Alias '{name}' not found.", err=True)
+        click.echo(f"별칭 '{name}'을 찾을 수 없습니다.", err=True)
         sys.exit(1)
     del data[name]
     _save(data)
-    click.echo(f"Alias '{name}' removed.")
+    click.echo(f"별칭 '{name}' 삭제됨.")
 
 
 @alias_group.command("run")
 @click.argument("name")
 @click.argument("extra", nargs=-1)
 def alias_run_cmd(name: str, extra: tuple):
-    """Run an alias by name (optional extra args appended)."""
+    """이름으로 별칭을 실행합니다 (추가 인자 선택)."""
     data = _load()
     if name not in data:
-        click.echo(f"Alias '{name}' not found. Run `troxy alias` to list.", err=True)
+        click.echo(f"별칭 '{name}'을 찾을 수 없습니다. `troxy alias` 실행하여 목록 확인", err=True)
         sys.exit(1)
     argv = shlex.split(data[name]) + list(extra)
     # Re-invoke the troxy CLI as a subprocess for isolation

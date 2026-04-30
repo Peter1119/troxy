@@ -100,7 +100,7 @@ def print_flow_detail(flow: dict, *, request_only=False, response_only=False,
                       headers_only=False, body_only=False) -> None:
     """Print flow detail with sections."""
     if not response_only and not body_only:
-        console.rule(f"[bold]Request[/bold]", style="blue")
+        console.rule(f"[bold]요청[/bold]", style="blue")
         url = f"{flow['scheme']}://{flow['host']}{flow['path']}"
         if flow.get("query"):
             url += f"?{flow['query']}"
@@ -120,7 +120,7 @@ def print_flow_detail(flow: dict, *, request_only=False, response_only=False,
         status = flow["status_code"]
         duration = _format_duration(flow.get("duration_ms"))
         console.rule(
-            f"[bold]Response ({status})[/bold] {duration}",
+            f"[bold]응답 ({status})[/bold] {duration}",
             style=_status_style(status),
         )
         headers = json.loads(flow["response_headers"]) if isinstance(flow["response_headers"], str) else flow["response_headers"]
@@ -154,7 +154,7 @@ def _print_body(body: str, content_type: str | None) -> None:
 
 def print_status(db_path: str, flow_count: int, db_size: int) -> None:
     """Print database status info."""
-    console.print(f"DB path:  {db_path}")
-    console.print(f"Flows:    {flow_count}")
+    console.print(f"DB 경로:  {db_path}")
+    console.print(f"Flow 수:  {flow_count}")
     size_str = f"{db_size / 1024:.1f}KB" if db_size < 1024 * 1024 else f"{db_size / 1024 / 1024:.1f}MB"
-    console.print(f"Size:     {size_str}")
+    console.print(f"크기:     {size_str}")

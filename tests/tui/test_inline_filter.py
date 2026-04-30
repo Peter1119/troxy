@@ -603,7 +603,7 @@ async def test_filter_status_bar_activates_on_submit_and_clears_on_empty(tmp_db)
         assert "active" in status_static.classes
         rendered = str(status_static.render())
         assert "host:example.com" in rendered
-        assert "f to edit" in rendered
+        assert "f 편집" in rendered
 
         # Clear via empty-submit.
         await pilot.press("f")

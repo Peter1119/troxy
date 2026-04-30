@@ -2,31 +2,31 @@
 
 # -- List View hints --
 LIST_HINT = (
-    "\u2191\u2193 browse \u00b7 \u23ce detail \u00b7 v side \u00b7 f filter"
-    " \u00b7 m mock \u00b7 M mocks \u00b7 s sort \u00b7 p pause"
-    " \u00b7 x clear \u00b7 q quit"
+    "\u2191\u2193 \uc774\ub3d9 \u00b7 \u23ce \uc0c1\uc138 \u00b7 v \uc0ac\uc774\ub4dc \u00b7 f \ud544\ud130"
+    " \u00b7 m mock \u00b7 M mock\ubaa9\ub85d \u00b7 s \uc815\ub82c \u00b7 p \uc77c\uc2dc\uc815\uc9c0"
+    " \u00b7 x \ucd08\uae30\ud654 \u00b7 q \uc885\ub8cc"
 )
 
 # -- Detail View hints --
 DETAIL_HINT = (
-    "\u2190\u2192 switch tab \u00b7 \u2191\u2193 scroll \u00b7 y copy"
-    " \u00b7 u copy url \u00b7 m mock \u00b7 c curl \u00b7 Esc"
+    "\u2190\u2192 \ud0ed \uc804\ud658 \u00b7 \u2191\u2193 \uc2a4\ud06c\ub864 \u00b7 y \ubcf5\uc0ac"
+    " \u00b7 u URL \ubcf5\uc0ac \u00b7 m mock \u00b7 c curl \u00b7 Esc"
 )
 
 # -- Mock List hints --
 MOCK_LIST_HINT = (
-    "\u2191\u2193 browse \u00b7 Space toggle"
-    " \u00b7 \u23ce edit \u00b7 a add \u00b7 d delete \u00b7 Esc back"
+    "\u2191\u2193 \uc774\ub3d9 \u00b7 Space \ud1a0\uae00"
+    " \u00b7 \u23ce \ud3b8\uc9d1 \u00b7 a \ucd94\uac00 \u00b7 d \uc0ad\uc81c \u00b7 Esc \ub4a4\ub85c"
 )
 
 # -- Copy modal options --
 COPY_OPTIONS = [
     ("1", "URL"),
-    ("2", "Request (full)"),
-    ("3", "Response (full)"),
-    ("4", "Response body only"),
-    ("5", "as curl"),
-    ("6", "as HTTPie"),
+    ("2", "Request (\uc804\uccb4)"),
+    ("3", "Response (\uc804\uccb4)"),
+    ("4", "Response body\ub9cc"),
+    ("5", "curl \ud615\uc2dd"),
+    ("6", "HTTPie \ud615\uc2dd"),
 ]
 
 
@@ -41,7 +41,7 @@ def filter_status_text(summary: str) -> str:
     filter, so the old ``Esc to reset`` copy was removed to avoid
     contradicting the new keybinding.
     """
-    return f"\U0001f50d filter: {summary}  \u00b7  f to edit"
+    return f"\U0001f50d \ud544\ud130: {summary}  \u00b7  f \ud3b8\uc9d1"
 
 
 # -- Toast messages --
@@ -51,27 +51,27 @@ def toast_copied(what: str, size_bytes: int) -> str:
         size = f"{size_bytes}b"
     else:
         size = f"{size_bytes / 1024:.1f}KB"
-    return f"\u2713 copied: {what} ({size})"
+    return f"\u2713 \ubcf5\uc0ac\ub428: {what} ({size})"
 
 
 def toast_mock_saved(name: str) -> str:
     """Toast after saving a mock rule."""
-    return f"\u2713 mock saved: {name} (enabled)"
+    return f"\u2713 mock \uc800\uc7a5\ub428: {name} (\ud65c\uc131\ud654)"
 
 
 def toast_mock_deleted(name: str) -> str:
     """Toast after deleting a mock rule."""
-    return f"\u2713 mock deleted: {name}"
+    return f"\u2713 mock \uc0ad\uc81c\ub428: {name}"
 
 
 def toast_cleared(count: int) -> str:
     """Toast after clearing all flows."""
-    return f"\u2713 {count} flows cleared"
+    return f"\u2713 {count}\uac1c flow \ucd08\uae30\ud654\ub428"
 
 
 def toast_intercept_placeholder() -> str:
     """Toast for intercept feature placeholder."""
-    return "intercept live edit \u2014 coming in v0.4"
+    return "\uc778\ud130\uc149\ud2b8 \uc2e4\uc2dc\uac04 \ud3b8\uc9d1 \u2014 v0.4 \uc608\uc815"
 
 
 # -- Confirm messages --
@@ -95,7 +95,7 @@ def info_bar(ip: str, mcp_registered: bool) -> str:
     """
     parts = [f"\U0001f4e1 {ip}"]
     if mcp_registered:
-        parts.append("\U0001f4a1 ask Claude via MCP")
+        parts.append("\U0001f4a1 Claude MCP \uc5f0\uacb0\ub428")
     return "  \u00b7  ".join(parts)
 
 
@@ -111,7 +111,7 @@ def proxy_info_line(ip: str, port: int) -> str:
     in one glance.
     """
     return (
-        f"\U0001f4e1 Proxy: {ip}:{port}"
+        f"\U0001f4e1 \ud504\ub85d\uc2dc: {ip}:{port}"
         f"  \u00b7  \U0001f510 CA: {CA_TRUST_URL}"
     )
 
@@ -128,13 +128,13 @@ def status_summary_line(
     Parts are joined with ``  \u00b7  `` and only populated parts are shown, so the
     line stays compact when MCP is off.
     """
-    state = "\U0001f534 recording" if recording else "\u23f8 paused"
+    state = "\U0001f534 \ucea1\ucc98 \uc911" if recording else "\u23f8 \uc77c\uc2dc\uc815\uc9c0"
     parts = [
-        f"{state} ({flow_count} flows)",
-        f"\U0001f9e9 {mock_count} mocks",
+        f"{state} ({flow_count}\uac1c flow)",
+        f"\U0001f9e9 {mock_count}\uac1c mock",
     ]
     if mcp_enabled:
-        parts.append("\U0001f4a1 ask Claude via MCP")
+        parts.append("\U0001f4a1 Claude MCP \uc5f0\uacb0\ub428")
     return "  \u00b7  ".join(parts)
 
 
@@ -174,4 +174,4 @@ def _shorten_db_path(db_path: str, max_len: int = 48) -> str:
 
 def header_text(db_path: str, flow_count: int) -> str:
     """Header text with DB path and flow count."""
-    return f"{_shorten_db_path(db_path)} \u00b7 {flow_count:,} flows"
+    return f"{_shorten_db_path(db_path)} \u00b7 {flow_count:,}\uac1c flow"

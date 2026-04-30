@@ -199,5 +199,5 @@ async def test_list_hint_advertises_s_sort(tmp_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         hint = app.screen.query_one("#hint-bar", Static)
-        assert "s sort" in str(hint.render())
+        assert "s 정렬" in str(hint.render())
         await pilot.press("q")

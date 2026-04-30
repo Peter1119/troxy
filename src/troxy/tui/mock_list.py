@@ -73,7 +73,7 @@ class MockListScreen(Screen):
     # ---------- composition / lifecycle ----------
 
     def compose(self) -> ComposeResult:
-        yield Static("\u2500\u2500 Mocks \u2500\u2500", id="mock-header")
+        yield Static("\u2500\u2500 Mock \ubaa9\ub85d \u2500\u2500", id="mock-header")
         table = DataTable(id="mock-table", zebra_stripes=True)
         table.cursor_type = "row"
         table.add_columns("ON", "#", "NAME", "MATCH", "STATUS", "HIT")

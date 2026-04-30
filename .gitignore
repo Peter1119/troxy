@@ -11,3 +11,6 @@ build/
 # ad-hoc response dumps / scratch files
 response
 response.*
+
+# git worktrees
+.worktrees/
