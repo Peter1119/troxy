@@ -1,0 +1,70 @@
+name: Update Homebrew formula
+
+on:
+  workflow_run:
+    workflows: ["Publish to PyPI"]
+    types: [completed]
+
+jobs:
+  update-formula:
+    name: Bump formula in homebrew-troxy tap
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          # workflow_run doesn't expose the tag directly; derive from the triggering ref.
+          REF="${{ github.event.workflow_run.head_sha }}"
+          # Fetch the tag that points at this commit
+          VERSION=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/tags" \
+            | jq -r --arg sha "$REF" '.[] | select(.object.sha == $sha) | .ref | ltrimstr("refs/tags/v")' \
+            | head -1)
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Compute sdist SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          URL="https://files.pythonhosted.org/packages/source/t/troxy/troxy-${VERSION}.tar.gz"
+          SHA256=$(curl -fsSL "$URL" | sha256sum | awk '{print $1}')
+          echo "SHA256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "URL=$URL" >> "$GITHUB_OUTPUT"
+          echo "SHA256: $SHA256"
+
+      - name: Checkout homebrew-troxy tap
+        uses: actions/checkout@v4
+        with:
+          repository: Peter1119/homebrew-troxy
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          SHA256="${{ steps.sha.outputs.SHA256 }}"
+          URL="${{ steps.sha.outputs.URL }}"
+          FORMULA="tap/Formula/troxy.rb"
+
+          sed -i "s|url \".*\"|url \"$URL\"|" "$FORMULA"
+          sed -i "s|sha256 \".*\"|sha256 \"$SHA256\"|" "$FORMULA"
+          sed -i "s|version \".*\"|version \"$VERSION\"|" "$FORMULA"
+
+          echo "Updated $FORMULA to v$VERSION"
+          cat "$FORMULA"
+
+      - name: Commit and push formula update
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cd tap
+          git config user.name "peter1119"
+          git config user.email "peter1119@users.noreply.github.com"
+          git add Formula/troxy.rb
+          git diff --staged --quiet && echo "No changes — formula already up to date." && exit 0
+          git commit -m "chore: bump troxy to v${VERSION}"
+          git push
