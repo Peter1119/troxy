@@ -5,6 +5,22 @@ can import it without violating layer dependency rules.
 """
 
 TOOL_SCHEMAS = {
+    "troxy_explain_failure": {
+        "description": (
+            "Analyze recent HTTP failures (4xx/5xx) and return semantic failure groups with plain-English hypotheses. "
+            "Use this when an API is misbehaving and you want to understand WHY — it classifies errors like "
+            "'auth_failure', 'rate_limit', 'server_error', etc. and surfaces the most likely root cause. "
+            "Defaults to the last 30 minutes. Narrow with domain= to focus on one service."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Limit analysis to a specific domain (partial match, e.g. 'api.example.com'). Omit to analyze all captured domains."},
+                "since": {"type": "string", "description": "Time window of failures to analyze, e.g. '30m', '1h', '2d'. Default: '30m'."},
+                "limit": {"type": "integer", "description": "Max number of failure flows to inspect. Default: 50.", "default": 50},
+            },
+        },
+    },
     "troxy_list_flows": {
         "description": "List captured HTTP flows. IMPORTANT: Always set limit (default 10). Use domain/status/method/path/since filters to narrow results.",
         "schema": {

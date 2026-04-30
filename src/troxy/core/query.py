@@ -133,6 +133,34 @@ def list_flows_filtered(
     return results
 
 
+def query_failures(
+    db_path: str,
+    *,
+    domain: str | None = None,
+    since_seconds: float | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Return flows with HTTP 4xx/5xx status codes, ordered by timestamp DESC."""
+    conn = get_connection(db_path)
+    conditions = ["status_code >= 400"]
+    params: list = []
+
+    if domain:
+        conditions.append("host LIKE ?")
+        params.append(f"%{domain}%")
+    if since_seconds is not None:
+        conditions.append("timestamp >= ?")
+        params.append(time.time() - since_seconds)
+
+    where = "WHERE " + " AND ".join(conditions)
+    sql = f"SELECT id, timestamp, method, host, path, status_code, duration_ms, response_body FROM flows {where} ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 def search_flows(
     db_path: str,
     query: str,

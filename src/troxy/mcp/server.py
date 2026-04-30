@@ -6,7 +6,7 @@ import os
 import sys
 
 from troxy.core.db import default_db_path, init_db, get_connection
-from troxy.core.query import list_flows, get_flow, search_flows
+from troxy.core.query import list_flows, get_flow, search_flows, query_failures
 from troxy.core.export import export_curl, export_httpie
 from troxy.core.formats import parse_form_body
 from troxy.core.intercept import (
@@ -158,6 +158,103 @@ def handle_drop(db_path: str, args: dict) -> str:
     return json.dumps({"dropped": args["pending_id"]})
 
 
+def _classify_failure(status: int, path: str, response_body: str | None) -> tuple[str, str, str]:
+    """Return (pattern, label, hypothesis) for a failed flow.
+
+    Purely structural — no LLM call. Keeps the tool cheap and cache-friendly.
+    Claude Code receives organized fuel and does the reasoning.
+    """
+    body_lower = (response_body or "").lower()
+
+    if status == 401:
+        if any(k in body_lower for k in ("expired", "invalid_token", "token_expired")):
+            return "token_expired", "Token expired", "Access token has expired — refresh or re-authenticate."
+        return "auth_failure", "Authentication failure", "Request is missing credentials or the token is invalid/expired."
+
+    if status == 403:
+        return "permission_denied", "Permission denied", "Credentials are valid but the caller lacks the required permission or scope."
+
+    if status == 404:
+        return "not_found", "Resource not found", "The endpoint or resource does not exist — check path and IDs."
+
+    if status == 422 or status == 400:
+        return "bad_request", "Bad request / validation error", "The request payload is malformed or fails server-side validation — inspect the request body."
+
+    if status == 429:
+        return "rate_limit", "Rate limit hit", "Too many requests — the client is being throttled. Back off and retry with exponential delay."
+
+    if status == 408 or status == 504 or status == 503:
+        return "timeout_or_unavailable", "Timeout / service unavailable", "Upstream service is slow or unreachable — check service health and network."
+
+    if 500 <= status <= 599:
+        return "server_error", "Server error", f"Unexpected server-side failure (HTTP {status}) — check server logs for stack traces."
+
+    if 400 <= status <= 499:
+        return "client_error", "Client error", f"HTTP {status} — client-side error; inspect request headers, path, and body."
+
+    return "unknown_failure", f"HTTP {status}", f"Unexpected status {status}."
+
+
+def handle_explain_failure(db_path: str, args: dict) -> str:
+    """Classify recent failure flows into semantic groups with hypotheses."""
+    since_seconds = _parse_since_arg(args.get("since", "30m"))
+    domain = args.get("domain")
+    limit = args.get("limit", 50)
+
+    flows = query_failures(db_path, domain=domain, since_seconds=since_seconds, limit=limit)
+
+    if not flows:
+        scope = f"domain={domain}" if domain else "all domains"
+        window = args.get("since", "30m")
+        return json.dumps({
+            "summary": f"No failures found in the last {window} ({scope}).",
+            "failure_groups": [],
+            "total_failures": 0,
+        })
+
+    import datetime
+
+    groups: dict[str, dict] = {}
+    for flow in flows:
+        status = flow["status_code"]
+        path = flow.get("path", "")
+        body = flow.get("response_body") or ""
+        pattern, label, hypothesis = _classify_failure(status, path, body)
+
+        if pattern not in groups:
+            groups[pattern] = {
+                "pattern": pattern,
+                "label": label,
+                "hypothesis": hypothesis,
+                "count": 0,
+                "examples": [],
+            }
+        groups[pattern]["count"] += 1
+        if len(groups[pattern]["examples"]) < 3:
+            ts = flow.get("timestamp")
+            ts_str = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S") if ts else ""
+            groups[pattern]["examples"].append({
+                "id": flow["id"],
+                "method": flow.get("method", ""),
+                "host": flow.get("host", ""),
+                "path": path,
+                "status": status,
+                "duration_ms": flow.get("duration_ms"),
+                "time": ts_str,
+            })
+
+    sorted_groups = sorted(groups.values(), key=lambda g: g["count"], reverse=True)
+    scope_str = f"on {domain}" if domain else "across all domains"
+    window_str = args.get("since", "30m")
+    summary = f"{len(flows)} failure(s) in the last {window_str} {scope_str}. {len(groups)} distinct pattern(s)."
+
+    return json.dumps({
+        "summary": summary,
+        "failure_groups": sorted_groups,
+        "total_failures": len(flows),
+    }, indent=2)
+
+
 from troxy.mcp.tools import TOOL_SCHEMAS
 
 _HANDLERS = {
@@ -166,6 +263,7 @@ _HANDLERS = {
     "troxy_search": handle_search,
     "troxy_export": handle_export,
     "troxy_status": handle_status,
+    "troxy_explain_failure": handle_explain_failure,
     "troxy_mock_add": handle_mock_add,
     "troxy_mock_list": handle_mock_list,
     "troxy_mock_remove": handle_mock_remove,
