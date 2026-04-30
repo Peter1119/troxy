@@ -207,13 +207,31 @@ AI가 생성한 step body/headers에 JSON 문법 오류가 있을 때 즉시 명
 | `body`가 `{`/`[`로 시작하는데 JSON 파싱 실패 | 에러 반환: `"step N body is not valid JSON: <파싱 오류>"` |
 | `headers`가 문자열인데 JSON 파싱 실패 | 에러 반환: `"step N headers is not valid JSON: <파싱 오류>"` |
 | `status_code` 누락 | 기존 `_validate_steps()` 처리 유지 |
-| 슬롯 미채움 (`{변수명}` 그대로 있음) | **검증 없음** — 단순히 문자열이므로 통과. 사용자 책임 |
+| 슬롯 미채움 — `body`/`headers`에 `{변수명}` 패턴 잔류 | **경고 반환** (저장 차단 X) — `warnings: ["step N body contains unfilled slot: {message}"]` |
+| body content-type 일치 여부 | **검증 안 함** (결정 확정: YAGNI) |
 
-> **TBD by user**: body가 JSON처럼 보이지 않는 경우(예: plain text, XML) content-type 헤더와 일치 여부를 검증할지? 현재 spec에서는 **검증 안 함** (YAGNI).
+### 5-3. 슬롯 감지 정규식
+```python
+import re
+_UNFILLED_SLOT = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
+```
+`body`와 `headers` 값(JSON 직렬화 후)에 대해 매칭. `{` 만으로 된 JSON 객체 자체는 이미 step 5-2의 JSON 파싱 단계를 통과한 이후라 슬롯 감지와 충돌하지 않는다.
 
-### 5-3. 구현 위치
+### 5-4. 에러/경고 반환 형식
+```json
+{
+  "rule_id": 42,
+  "type": "scenario",
+  "warnings": [
+    "step 1 body contains unfilled slot: {message}",
+    "step 2 headers contains unfilled slot: {retry_after}"
+  ]
+}
+```
+경고가 없으면 `warnings` 키 미포함. 에러(JSON 파싱 실패)는 `rule_id` 없이 `{"error": "validation", "detail": "..."}` 반환.
+
+### 5-5. 구현 위치
 - `src/troxy/mcp/mock_handlers.py` — `handle_mock_add()` 내에서 sequence steps 검증
-- 에러 반환 형식: `{"error": "validation", "detail": "step 1 body is not valid JSON: ..."}`
 
 ---
 
@@ -247,7 +265,7 @@ Brief: "1회 200, 2-3회 401 토큰만료, 4회 500"
 ]
 ```
 
-> **TBD by user**: CLI가 LLM을 직접 호출하는 `--llm` 플래그를 나중에 추가할지? 그렇다면 어느 provider? (Claude API, OpenAI, local?) 현재 spec에서는 **LLM 호출 없음**. 단순 패턴 매칭(숫자 코드, 에러 키워드 → 템플릿 선택) 또는 echo-only.
+**결정 확정**: LLM 호출 없음. 휴리스틱 파싱만 사용.
 
 ### 6-3. Brief 파싱 — 간단 휴리스틱 (LLM 없이)
 
@@ -258,22 +276,102 @@ CLI dry-run에 한해 간단한 규칙 기반 파싱:
 3. status code 숫자(200, 401, 500 등) → 직접 매핑
 4. 에러 키워드("토큰만료", "unauthorized", "rate limit" 등) → 템플릿 key로 매핑
 
-> **TBD by user**: 이 파싱이 틀렸을 때 사용자가 직접 수정할 수 있도록 `--json` 플래그로 raw sequence만 출력하는 기능 필요한가?
+**결정 확정**: `--json` 플래그 추가.
 
-### 6-4. `--execute` 플래그
+### 6-4. `--json` 플래그 (결정 확정: 추가)
+
+```bash
+troxy scenario from-brief \
+  --domain api.example.com --path /pay --method POST \
+  --brief "1회 200, 2-3회 401, 4회 500" \
+  --json
+```
+
+**출력**: pretty-printed JSON 배열만 stdout 출력. 파이프·스크립팅 용도.
+
+```json
+[
+  {"status_code": 200, "body": "{\"result\": \"ok\"}", "headers": "{\"Content-Type\": \"application/json\"}"},
+  ...
+]
+```
+
+### 6-5. `--execute` 플래그
 
 ```bash
 troxy scenario from-brief ... --execute --name "payment-retry"
 # → 내부적으로 troxy scenario add (core API 직접 호출) 실행
 ```
 
-### 6-5. 구현 위치
+### 6-6. 구현 위치
 - `src/troxy/cli/scenario_cmds.py` — `from-brief` 서브커맨드 추가
 - `src/troxy/core/error_templates.py` — 공유 카탈로그에서 CLI도 참조
+- `src/troxy/core/scenario_brief_parser.py` — 공통 휴리스틱 파서 (MCP + CLI 공유, 7-A 참조)
 
 ---
 
-## 7. DB 스키마 변경
+## 7-A. 공유 휴리스틱 파서 — `scenario_brief_parser.py`
+
+### 역할
+`troxy_mock_from_scenario_brief` (MCP)와 CLI `from-brief` 양쪽에서 `example_sequence`를 생성하는 로직을 한 곳에 모아 중복을 제거한다.
+
+### 모듈 위치
+`src/troxy/core/scenario_brief_parser.py` — `core` 레이어이므로 `mitmproxy` 미사용. CLI/MCP 양쪽에서 import 가능.
+
+### 공개 인터페이스
+```python
+def parse_brief(
+    brief: str,
+    templates: list[dict],   # ERROR_TEMPLATES 주입
+) -> list[dict]:
+    """
+    자연어 brief를 sequence step 배열로 변환.
+    반환: [{"status_code": N, "body": "...", "headers": "..."}, ...]
+
+    파싱 불가 구간은 {"status_code": 200, "body": "TODO: fill body"} 형태로 placeholder 삽입.
+    """
+```
+
+### 파싱 규칙 (휴리스틱)
+1. `"N회"` / `"Nth"` / `"N번"` → step index
+2. `"N-M회"` / `"N~M회"` → index N~M 동일 step 반복
+3. `"N회부터"` / `"N 이후"` → index N~끝 모두 동일 step (loop=false이면 마지막 step 고정)
+4. HTTP status code 숫자 → 직접 매핑
+5. 에러 키워드 매핑 (한국어 + 영어 모두 지원):
+
+   | 키워드 | 매핑 key |
+   |--------|----------|
+   | `토큰만료`, `token expired`, `unauthorized`, `인증` | `unauthorized` |
+   | `권한`, `forbidden`, `접근 거부` | `forbidden` |
+   | `rate limit`, `속도 제한`, `too many` | `rate_limited` |
+   | `서버 오류`, `internal error`, `500` | `internal_error` |
+   | `점검`, `unavailable`, `503` | `service_unavailable` |
+   | `중복`, `conflict`, `409` | `conflict` |
+   | `없음`, `not found`, `404` | `not_found` |
+   | `유효성`, `validation`, `422` | `validation_failed` |
+
+6. 매핑 후 템플릿 슬롯에 적절한 기본값 자동 채움 (예: `{message}` → `"Unauthorized"`)
+
+### 의존성
+- `src/troxy/core/error_templates.py` (주입 또는 직접 import)
+- 표준 라이브러리만 사용 (re, json)
+
+---
+
+## 7-B. 언어 정책 (결정 확정)
+
+| 위치 | 언어 | 근거 |
+|------|------|------|
+| MCP tool `description` 필드 | **한국어** | troxy CLI 톤 일관성 |
+| MCP tool `description` 예시 | **한국어 + 영어 병기** | 다국어 LLM 호환 |
+| error template `description` | **한국어** | troxy 내부 카탈로그 |
+| error template `body_template` 의 메시지 값 | **영어** | API 응답 관행 (JSON body는 영문) |
+| CLI 출력 텍스트 | **한국어** | 기존 troxy CLI 톤 유지 |
+| 슬롯 경고 메시지 (`warnings[]`) | **영어** | MCP JSON 응답, LLM 가독성 |
+
+---
+
+## 8. DB 스키마 변경
 
 **없음.** `mock_scenarios` 테이블 현재 구조:
 
@@ -309,7 +407,7 @@ CREATE TABLE IF NOT EXISTS mock_scenarios (
 | 명시적 reset 명령 | `troxy_mock_reset` / `troxy scenario reset <id>` |
 | 시나리오 sequence 교체 (`troxy_mock_update`) | `current_step → 0` 자동 reset (기존 동작 유지) |
 
-> **TBD by user**: troxy 재시작 시 모든 scenario를 자동으로 reset할 옵션(`--reset-on-start` flag)이 필요한가? 현재 spec에서는 **미지원**. 필요 시 addon.py에 옵션 추가.
+**결정 확정**: 재시작 auto-reset 없음. 명시적 `troxy_mock_reset` / `troxy scenario reset` 만 제공.
 
 ---
 
@@ -330,16 +428,16 @@ CREATE TABLE IF NOT EXISTS mock_scenarios (
 
 | 파일 | 케이스 |
 |------|--------|
-| `test_error_templates.py` | 카탈로그 구조 검증 (각 항목 required 필드), slot 파싱 |
-| `test_mock_validation.py` | body JSON 검증 — valid/invalid/borderline(XML, plain text) |
-| `test_scenario_from_brief.py` (CLI) | 간단 brief → sequence 변환 정확도, edge cases |
+| `test_error_templates.py` | 카탈로그 8종 구조 검증 (required 필드: key, status_code, body_template, slots) |
+| `test_scenario_brief_parser.py` | `parse_brief()` — 한국어 brief, 영어 brief, 범위 표현(`N-M회`), 알 수 없는 표현(placeholder 생성), 빈 brief |
+| `test_mock_validation.py` | body JSON 검증 (valid/invalid/XML), 슬롯 미채움 경고 (단일/복수 슬롯, 슬롯 없음) |
 
 ### 10-2. integration / MCP handler tests
 
 | 파일 | 케이스 |
 |------|--------|
-| `test_mock_handlers.py` | `handle_error_templates()` 반환 구조, `handle_mock_from_scenario_brief()` 반환 구조 |
-| 기존 `test_mock_add_sequence.py` | body validation 에러 케이스 추가 |
+| `test_mock_handlers.py` | `handle_error_templates()` 반환 구조, `handle_mock_from_scenario_brief(brief=...)` 반환 구조, `brief` 없을 때 에러 |
+| 기존 `test_mock_add_sequence.py` | body JSON 파싱 실패 에러, 슬롯 경고 포함 성공 케이스 추가 |
 
 ### 10-3. E2E (선택)
 MCP 도구 흐름: `troxy_mock_error_templates` → `troxy_mock_add(sequence=[...])` → addon이 실제 요청에 올바른 step 반환 확인 (기존 E2E 패턴 참조).
@@ -350,40 +448,42 @@ MCP 도구 흐름: `troxy_mock_error_templates` → `troxy_mock_add(sequence=[..
 
 | 파일 | 변경 유형 |
 |------|-----------|
-| `src/troxy/core/error_templates.py` | **신규** — 정적 카탈로그 데이터 |
-| `src/troxy/core/tool_catalog.py` | **수정** — 2개 도구 스키마 추가 (`error_templates`, `from_scenario_brief`) |
-| `src/troxy/mcp/mock_handlers.py` | **수정** — 핸들러 2개 추가 + `handle_mock_add` validation |
+| `src/troxy/core/error_templates.py` | **신규** — 정적 카탈로그 데이터 (`ERROR_TEMPLATES`) |
+| `src/troxy/core/scenario_brief_parser.py` | **신규** — 공유 휴리스틱 파서 (`parse_brief()`) |
+| `src/troxy/core/tool_catalog.py` | **수정** — 2개 도구 스키마 추가 (`troxy_mock_error_templates`, `troxy_mock_from_scenario_brief`) |
+| `src/troxy/mcp/mock_handlers.py` | **수정** — 핸들러 2개 추가 + `handle_mock_add()` validation + 슬롯 경고 |
 | `src/troxy/mcp/server.py` | **수정** — 신규 도구 라우팅 추가 |
-| `src/troxy/cli/scenario_cmds.py` | **수정** — `from-brief` 서브커맨드 추가 |
+| `src/troxy/cli/scenario_cmds.py` | **수정** — `from-brief` 서브커맨드 추가 (`--json`, `--execute`) |
 | `tests/unit/test_error_templates.py` | **신규** |
-| `tests/unit/test_mock_validation.py` | **신규** 또는 기존 확장 |
+| `tests/unit/test_scenario_brief_parser.py` | **신규** — 파서 유닛 테스트 |
+| `tests/unit/test_mock_validation.py` | **신규** — body JSON 검증 + 슬롯 경고 |
 
 ---
 
-## 12. 사용자 결정 필요 항목 (TBD by user)
+## 12. 사용자 결정 항목 — 전체 결정 완료
 
-| # | 항목 | 현재 spec 기본값 | 결정 필요 사유 |
-|---|------|-----------------|----------------|
-| TBD-1 | CLI `from-brief` LLM 호출 여부 | **없음** (패턴 매칭만) | LLM provider 선택, API key 관리, 비용 |
-| TBD-2 | LLM provider (if TBD-1=yes) | — | Claude API / OpenAI / local |
-| TBD-3 | body content-type 일치 검증 | **없음** (YAGNI) | 노이즈 vs 정확성 트레이드오프 |
-| TBD-4 | troxy 재시작 시 카운터 auto-reset | **없음** | 디버깅 편의 vs 재현성 |
-| TBD-5 | 슬롯 미채움(`{변수명}`) 경고 | **없음** | LLM 실수 감지 vs 유연성 |
-| TBD-6 | CLI `from-brief --json` 플래그 (raw JSON만 출력) | **없음** | 스크립팅 편의 |
-| TBD-7 | 에러 템플릿 사용자 커스텀 (DB/파일 기반) | **없음, 정적만** | 확장성 필요 시 추가 |
+| # | 항목 | **결정** |
+|---|------|---------|
+| TBD-1 | CLI `from-brief` LLM 호출 여부 | **없음** — 휴리스틱만 |
+| TBD-2 | LLM provider | **N/A** (TBD-1=없음) |
+| TBD-3 | body content-type 일치 검증 | **없음** |
+| TBD-4 | troxy 재시작 시 카운터 auto-reset | **없음** — 명시적 reset 명령 충분 |
+| TBD-5 | 슬롯 미채움(`{변수명}`) 경고 | **추가** — warning 반환, 저장 차단 X |
+| TBD-6 | CLI `from-brief --json` 플래그 | **추가** |
+| TBD-7 | 에러 템플릿 사용자 커스텀 | **없음** — 정적 8종 |
 
 ---
 
 ## 13. 우선순위 요약 (이슈 #6 기준)
 
-| 컴포넌트 | 이슈 우선순위 | spec 입장 |
-|----------|--------------|-----------|
-| A. `troxy_mock_error_templates` | MUST | 구현 대상 |
-| B. `troxy_mock_from_scenario_brief` | SHOULD (도구 description 강화) | 구현 대상 |
-| C. body validation | MUST | 구현 대상 |
-| D. CLI `from-brief` (dry-run) | SHOULD | 구현 대상 (LLM 호출 없이) |
-| D'. CLI `from-brief --llm` | 이슈 미언급 | **TBD-1** |
+| 컴포넌트 | 이슈 우선순위 | 결정 |
+|----------|--------------|------|
+| A. `troxy_mock_error_templates` | MUST | **구현** |
+| B. `troxy_mock_from_scenario_brief` | SHOULD | **구현** |
+| C. body validation + 슬롯 경고 | MUST | **구현** |
+| D. CLI `from-brief` (`--json`, `--execute`) | SHOULD | **구현** (LLM 없이) |
+| E. `scenario_brief_parser.py` 공통 모듈 | 내부 설계 결정 | **구현** |
 
 ---
 
-*이 문서는 구현 전 사용자(CEO) 승인이 필요합니다. 승인 후 `writing-plans` 스킬로 구현 플랜을 작성합니다.*
+*사용자(CEO) 승인 완료. 다음 단계: `writing-plans` 스킬로 구현 플랜 작성.*
