@@ -175,7 +175,7 @@ def _print_replay_body(resp):
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        click.echo(f"(바이너리 응답, {len(data)} bytes)")
+        click.echo(f"(바이너리 응답, {len(data)} 바이트)")
         return
     ct = resp.headers.get("Content-Type", "") if hasattr(resp, "headers") else ""
     if "json" in ct:
@@ -187,7 +187,7 @@ def _print_replay_body(resp):
     # Truncate very long text
     if len(text) > 8000:
         click.echo(text[:8000])
-        click.echo(f"... ({len(text) - 8000} more bytes)")
+        click.echo(f"... ({len(text) - 8000} 바이트 더)")
     else:
         click.echo(text)
 
