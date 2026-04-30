@@ -96,11 +96,11 @@ async def test_p_key_refreshes_status_bar_immediately(tmp_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         info = app.screen.query_one("#info-bar", Static)
-        assert "recording" in str(info.render())
+        assert "캡처 중" in str(info.render())
         await pilot.press("p")
         await pilot.pause()
-        assert "paused" in str(info.render())
-        assert "recording" not in str(info.render())
+        assert "일시정지" in str(info.render())
+        assert "캡처 중" not in str(info.render())
         await pilot.press("q")
 
 
@@ -121,10 +121,10 @@ async def test_p_key_toggle_round_trip(tmp_db):
         await pilot.press("p")
         await pilot.pause()
         info = app.screen.query_one("#info-bar", Static)
-        assert "paused" in str(info.render())
+        assert "일시정지" in str(info.render())
         await pilot.press("p")
         await pilot.pause()
-        assert "recording" in str(info.render())
+        assert "캡처 중" in str(info.render())
         await pilot.press("q")
 
 
@@ -141,5 +141,5 @@ async def test_list_hint_advertises_p_pause(tmp_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         hint = app.screen.query_one("#hint-bar", Static)
-        assert "p pause" in str(hint.render())
+        assert "p 일시정지" in str(hint.render())
         await pilot.press("q")
