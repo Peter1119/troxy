@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -33,7 +34,7 @@ def resolve_editor() -> str | None:
     """
     for env_var in ("VISUAL", "EDITOR"):
         cmd = os.environ.get(env_var)
-        if cmd and shutil.which(cmd):
+        if cmd and shutil.which(cmd.split()[0]):
             return cmd
     for fallback in ("nano", "vi"):
         if shutil.which(fallback):
@@ -117,11 +118,11 @@ async def open_in_editor(
         with tempfile.NamedTemporaryFile(
             suffix=ext, delete=False, mode="w", encoding="utf-8"
         ) as f:
+            tmp_path = f.name  # 먼저 캡처 — write 실패 시에도 finally가 unlink
             f.write(body)
-            tmp_path = f.name
 
         async with app.suspend():
-            result = subprocess.run([editor, tmp_path])
+            result = subprocess.run(shlex.split(editor) + [tmp_path])
 
         if result.returncode != 0:
             raise EditorCancelledError(
