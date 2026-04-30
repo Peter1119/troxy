@@ -9,6 +9,10 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, Label, Select, Static, Switch, TextArea
 
 from troxy.core.mock import add_mock_rule, suggest_glob
+from troxy.tui.external_editor import (
+    EditorCancelledError, EditorIOError, EditorNotFoundError,
+    open_in_editor, prettify_body, validate_json_body,
+)
 
 
 STATUS_OPTIONS: list[tuple[str, str]] = [
@@ -67,6 +71,7 @@ class MockDialog(ModalScreen):
     BINDINGS = [
         ("escape", "cancel", "cancel"),
         ("ctrl+s", "save", "save"),
+        ("ctrl+e", "open_editor", "external editor"),
         ("ctrl+l", "clear_body", "clear body"),
     ]
 
@@ -140,7 +145,7 @@ class MockDialog(ModalScreen):
             initial_name = self._auto_name(f)
             initial_status = str(f["status_code"])
             raw_body = f.get("response_body") or ""
-        initial_body = self._prettify_body(raw_body, f.get("response_content_type"))
+        initial_body = prettify_body(raw_body, f.get("response_content_type"))
 
         path_shown = suggested if has_glob else f["path"]
 
@@ -173,29 +178,11 @@ class MockDialog(ModalScreen):
             yield Label("Body:", classes="field-label")
             yield TextArea(initial_body, id="mock-body", language="json")
             yield Static(
-                "Ctrl+S \uc800\uc7a5 \u00b7 Ctrl+L body \ucd08\uae30\ud654 \u00b7 Esc \ucde8\uc18c",
+                "Ctrl+S \uc800\uc7a5 \u00b7 Ctrl+E \uc5d0\ub514\ud130 \u00b7 Ctrl+L body \ucd08\uae30\ud654 \u00b7 Esc \ucde8\uc18c",
                 classes="dialog-hint",
             )
 
     # ---------- helpers ----------
-
-    @staticmethod
-    def _prettify_body(body: str, content_type: str | None) -> str:
-        """Pretty-print the body if content_type is JSON, else preserve verbatim.
-
-        Invalid JSON falls through to the raw string — editing a mock should never
-        silently corrupt the user's payload.
-        """
-        if not body:
-            return ""
-        if content_type and "json" in content_type.lower():
-            try:
-                return json.dumps(
-                    json.loads(body), indent=2, ensure_ascii=False
-                )
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return body
 
     @staticmethod
     def _auto_name(flow: dict) -> str:
@@ -248,6 +235,12 @@ class MockDialog(ModalScreen):
             status_code = int(f["status_code"])
 
         body = self.query_one("#mock-body", TextArea).text
+        ct = f.get("response_content_type") or ""
+        if "json" in ct.lower():
+            ok, err_msg = validate_json_body(body)
+            if not ok:
+                self.notify(err_msg, severity="error")
+                return
         headers_json = self._serialize_headers(f.get("response_headers"))
 
         try:
@@ -269,6 +262,20 @@ class MockDialog(ModalScreen):
         final_name = name or f"rule-{rule_id}"
         self.post_message(self.Saved(rule_id, final_name))
         self.app.pop_screen()
+
+    async def action_open_editor(self) -> None:
+        body = self.query_one("#mock-body", TextArea).text
+        ct = self._flow.get("response_content_type")
+        try:
+            self.query_one("#mock-body", TextArea).load_text(
+                await open_in_editor(body, ct, self.app)
+            )
+        except EditorNotFoundError:
+            self.notify("에디터를 찾을 수 없습니다. $EDITOR 환경변수를 설정하세요.", severity="error")
+        except EditorCancelledError:
+            self.notify("편집이 취소되었습니다", severity="warning")
+        except EditorIOError as e:
+            self.notify(str(e), severity="error")
 
     def action_clear_body(self) -> None:
         # Ctrl+L wipes the body TextArea only (Bug #17) — readline-style

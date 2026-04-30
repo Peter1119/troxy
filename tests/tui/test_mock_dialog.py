@@ -8,6 +8,7 @@ import pytest
 from troxy.core.db import init_db
 from troxy.core.mock import add_mock_rule, list_mock_rules
 from troxy.core.store import insert_flow
+from troxy.tui.external_editor import prettify_body
 from troxy.tui.mock_dialog import MockDialog
 
 
@@ -244,38 +245,38 @@ async def test_detail_screen_m_key_opens_mock_dialog(tmp_db):
 
 def test_prettify_body_indents_json_with_2_spaces():
     """JSON content_type → indent=2, ensure_ascii=False."""
-    out = MockDialog._prettify_body('{"a":1,"b":"\ud55c"}', "application/json")
+    out = prettify_body('{"a":1,"b":"\ud55c"}', "application/json")
     assert out == '{\n  "a": 1,\n  "b": "\ud55c"\n}'
 
 
 def test_prettify_body_preserves_invalid_json():
     """Invalid JSON with json content_type → verbatim, never silently corrupts."""
     raw = "{not valid json"
-    assert MockDialog._prettify_body(raw, "application/json") == raw
+    assert prettify_body(raw, "application/json") == raw
 
 
 def test_prettify_body_preserves_plain_text():
     """Non-JSON content_type → raw body passthrough."""
     assert (
-        MockDialog._prettify_body("hello world", "text/plain")
+        prettify_body("hello world", "text/plain")
         == "hello world"
     )
 
 
 def test_prettify_body_handles_none_content_type():
     """No content_type → don't attempt JSON parsing."""
-    assert MockDialog._prettify_body('{"a":1}', None) == '{"a":1}'
+    assert prettify_body('{"a":1}', None) == '{"a":1}'
 
 
 def test_prettify_body_empty_body_returns_empty():
     """Empty body short-circuits to empty string."""
-    assert MockDialog._prettify_body("", "application/json") == ""
-    assert MockDialog._prettify_body(None, "application/json") == ""
+    assert prettify_body("", "application/json") == ""
+    assert prettify_body(None, "application/json") == ""
 
 
 def test_prettify_body_json_charset_variant():
     """application/json; charset=utf-8 still triggers pretty path (substring match)."""
-    out = MockDialog._prettify_body('{"k":1}', "application/json; charset=utf-8")
+    out = prettify_body('{"k":1}', "application/json; charset=utf-8")
     assert out == '{\n  "k": 1\n}'
 
 
