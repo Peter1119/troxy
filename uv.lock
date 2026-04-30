@@ -1243,6 +1243,7 @@ mcp = [
 [package.dev-dependencies]
 dev = [
     { name = "pexpect" },
+    { name = "pytest" },
     { name = "pyyaml" },
 ]
 
@@ -1262,6 +1263,7 @@ provides-extras = ["mcp", "dev"]
 [package.metadata.requires-dev]
 dev = [
     { name = "pexpect", specifier = ">=4.9.0" },
+    { name = "pytest", specifier = ">=9.0.3" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
