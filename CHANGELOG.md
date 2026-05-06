@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-06
+
 ### Added
 - **`troxy_explain_failure` MCP tool** — analyzes recent HTTP failures (4xx/5xx) and returns
   semantic failure groups with plain-English hypotheses (`auth_failure`, `rate_limit`,
